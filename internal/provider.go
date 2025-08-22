@@ -49,7 +49,7 @@ func (p *InfradotsProvider) Schema(_ context.Context, _ provider.SchemaRequest, 
 				Required:    true,
 				Sensitive:   true,
 			},
-			"tls_insecure_skip_verify": schema.StringAttribute{
+			"tls_insecure_skip_verify": schema.BoolAttribute{
 				Description: "If true, skips TLS certificate verification (not recommended for production).",
 				Optional:    true,
 			},
@@ -65,8 +65,14 @@ func (p *InfradotsProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
+	// Set default value for tls_insecure_skip_verify if not provided
+	tlsInsecureSkipVerify := true
+	if !config.TLSInsecureSkipVerify.IsNull() {
+		tlsInsecureSkipVerify = config.TLSInsecureSkipVerify.ValueBool()
+	}
+
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: config.TLSInsecureSkipVerify.ValueBool(),
+		InsecureSkipVerify: tlsInsecureSkipVerify,
 	}
 	transport := &http.Transport{
 		TLSClientConfig: tlsConfig,
@@ -74,10 +80,14 @@ func (p *InfradotsProvider) Configure(ctx context.Context, req provider.Configur
 	httpClient := &http.Client{Transport: transport}
 
 	p.client = httpClient
-	p.host = config.Hostname.ValueString()
+	if config.Hostname.IsNull() {
+		p.host = "api.infradots.com"
+	} else {
+		p.host = config.Hostname.ValueString()
+	}
+
 	p.token = config.Token.ValueString()
 	tflog.Info(ctx, "Creating infradots client information", map[string]any{"success": true})
-
 }
 
 // Resources returns the list of resource implementations.

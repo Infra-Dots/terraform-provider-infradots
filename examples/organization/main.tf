@@ -7,7 +7,6 @@ terraform {
 }
 
 provider "infradots" {
-  host  = "api.infradots.com"  # Using the provided localhost URL
   token = "idp-token"
 }
 
@@ -19,10 +18,11 @@ output "organization_id" {
   value = infradots_organization.example.id
 }
 
-output "organization_created_at" {
-  value = infradots_organization.example.created_at
+
+output "agents_enabled" {
+  value = infradots_organization.example.agents_enabled
 }
 
-output "organization_execution_mode" {
+output "execution_mode" {
   value = infradots_organization.example.execution_mode
 }

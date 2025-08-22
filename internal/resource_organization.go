@@ -9,12 +9,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-var _ resource.Resource = &OrganizationResource{}
+var (
+	_ resource.Resource              = &OrganizationResource{}
+	_ resource.ResourceWithConfigure = &OrganizationResource{}
+)
 
 func NewOrganizationResource() resource.Resource {
 	return &OrganizationResource{}
@@ -30,16 +38,16 @@ type OrganizationResourceModel struct {
 }
 
 type OrganizationAPIResponse struct {
-	ID            string                 `json:"id"`
-	Name          string                 `json:"name"`
-	Members       []Member               `json:"members"`
-	CreatedAt     time.Time              `json:"created_at"`
-	UpdatedAt     time.Time              `json:"updated_at"`
-	Subscription  map[string]interface{} `json:"subscription"`
-	Tags          map[string]interface{} `json:"tags"`
-	Teams         []Team                 `json:"teams"`
-	ExecutionMode string                 `json:"execution_mode"`
-	AgentsEnabled bool                   `json:"agents_enabled"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Members       []Member       `json:"members"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	Subscription  map[string]any `json:"subscription"`
+	Tags          map[string]any `json:"tags"`
+	Teams         []Team         `json:"teams"`
+	ExecutionMode string         `json:"execution_mode"`
+	AgentsEnabled bool           `json:"agents_enabled"`
 }
 
 type Member struct {
@@ -50,14 +58,10 @@ type Team struct {
 	Name string `json:"name"`
 }
 
-type OrganizationCreateRequest struct {
-	Name string `json:"name"`
-}
-
 type OrganizationUpdateRequest struct {
 	Name          string `json:"name,omitempty"`
 	ExecutionMode string `json:"execution_mode,omitempty"`
-	AgentsEnabled *bool  `json:"agents_enabled,omitempty"`
+	AgentsEnabled bool   `json:"agents_enabled,omitempty"`
 }
 
 type OrganizationResource struct {
@@ -70,6 +74,7 @@ func (r *OrganizationResource) Metadata(_ context.Context, _ resource.MetadataRe
 
 func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Organization in InfraDots Platform",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The organization unique ID (UUID).",
@@ -82,6 +87,7 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 			"created_at": schema.StringAttribute{
 				Description: "The timestamp when the organization was created.",
 				Computed:    true,
+				Default:     stringdefault.StaticString(""),
 			},
 			"updated_at": schema.StringAttribute{
 				Description: "The timestamp when the organization was last updated.",
@@ -91,11 +97,16 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				Description: "The execution mode for the organization (Remote, Local, etc.).",
 				Optional:    true,
 				Computed:    true,
+				Default:     stringdefault.StaticString("remote"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("local", "remote"),
+				},
 			},
 			"agents_enabled": schema.BoolAttribute{
-				Description: "Whether agents are enabled for the organization.",
+				Description: "Whether IDP agents are enabled for the organization.",
 				Optional:    true,
 				Computed:    true,
+				Default:     booldefault.StaticBool(true),
 			},
 		},
 	}
@@ -117,8 +128,10 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	createReq := OrganizationCreateRequest{
-		Name: data.Name.ValueString(),
+	createReq := OrganizationUpdateRequest{
+		Name:          data.Name.ValueString(),
+		ExecutionMode: data.ExecutionMode.ValueString(),
+		AgentsEnabled: data.AgentsEnabled.ValueBool(),
 	}
 
 	reqBody, err := json.Marshal(createReq)
@@ -168,10 +181,11 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	data.ID = types.StringValue(organization.ID)
 	data.CreatedAt = types.StringValue(organization.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(organization.UpdatedAt.Format(time.RFC3339))
-	data.ExecutionMode = types.StringValue(organization.ExecutionMode)
+	data.ExecutionMode = types.StringValue(strings.ToLower(organization.ExecutionMode))
 	data.AgentsEnabled = types.BoolValue(organization.AgentsEnabled)
 
 	diags = resp.State.Set(ctx, &data)
+	tflog.Info(ctx, "Module Resource Created", map[string]any{"success": true})
 	resp.Diagnostics.Append(diags...)
 }
 
@@ -259,8 +273,7 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	if !plan.AgentsEnabled.Equal(state.AgentsEnabled) {
-		agentsEnabled := plan.AgentsEnabled.ValueBool()
-		updateReq.AgentsEnabled = &agentsEnabled
+		updateReq.AgentsEnabled = plan.AgentsEnabled.ValueBool()
 	}
 
 	reqBody, err := json.Marshal(updateReq)
