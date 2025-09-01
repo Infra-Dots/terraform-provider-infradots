@@ -30,9 +30,16 @@ var (
 
 func main() {
 	var debug bool
+	var versionFlag bool
 
 	flag.BoolVar(&debug, "debug", false, "set to true to run the provider with support for debuggers like delve")
+	flag.BoolVar(&versionFlag, "version", false, "show version information")
 	flag.Parse()
+
+	if versionFlag {
+		log.Printf("terraform-provider-infradots version: %s", version)
+		return
+	}
 
 	opts := providerserver.ServeOpts{
 		Address: "registry.terraform.io/infradots/infradots",
