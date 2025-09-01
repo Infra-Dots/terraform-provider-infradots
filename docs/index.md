@@ -17,9 +17,8 @@ description: |-
 
 ### Required
 
-- `hostname` (String) The hostname of the Infradots instance.
 - `token` (String, Sensitive) API token for authenticating requests.
 
 ### Optional
-
+- `hostname` (String) The hostname of the Infradots instance. 
 - `tls_insecure_skip_verify` (String) If true, skips TLS certificate verification (not recommended for production).
