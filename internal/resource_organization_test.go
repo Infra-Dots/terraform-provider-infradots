@@ -39,7 +39,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"subscription": {},
 			"tags": {},
 			"teams": [{"name": "devops"}],
-			"execution_mode": "Remote",
+			"execution_mode": "remote",
 			"agents_enabled": true
 		}`
 		resp.StatusCode = http.StatusCreated
@@ -58,7 +58,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"subscription": {},
 			"tags": {},
 			"teams": [{"name": "devops"}],
-			"execution_mode": "Remote",
+			"execution_mode": "remote",
 			"agents_enabled": true
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -76,7 +76,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"subscription": {},
 			"tags": {},
 			"teams": [{"name": "devops"}],
-			"execution_mode": "Remote",
+			"execution_mode": "remote",
 			"agents_enabled": true
 		}]`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -174,7 +174,7 @@ func TestOrganizationResource_Create(t *testing.T) {
 	require.Empty(t, diags)
 
 	assert.Equal(t, "test-org", state.Name.ValueString())
-	assert.Equal(t, "Remote", state.ExecutionMode.ValueString())
+	assert.Equal(t, "remote", state.ExecutionMode.ValueString())
 	assert.True(t, state.AgentsEnabled.ValueBool())
 }
 
@@ -227,7 +227,7 @@ func TestOrganizationResource_Read(t *testing.T) {
 	assert.Equal(t, "test-org", newState.Name.ValueString())
 	assert.Equal(t, "2025-07-07T12:00:00Z", newState.CreatedAt.ValueString())
 	assert.Equal(t, "2025-07-07T12:00:00Z", newState.UpdatedAt.ValueString())
-	assert.Equal(t, "Remote", newState.ExecutionMode.ValueString())
+	assert.Equal(t, "remote", newState.ExecutionMode.ValueString())
 	assert.True(t, newState.AgentsEnabled.ValueBool())
 }
 
@@ -241,7 +241,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	var state OrganizationResourceModel
 	state.ID = types.StringValue("2e240d2c-78e0-4832-abdc-daa33477a238")
 	state.Name = types.StringValue("test-org")
-	state.ExecutionMode = types.StringValue("Remote")
+	state.ExecutionMode = types.StringValue("remote")
 	state.AgentsEnabled = types.BoolValue(true)
 
 	// Setup planned new state
