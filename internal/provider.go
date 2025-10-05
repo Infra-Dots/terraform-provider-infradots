@@ -96,6 +96,7 @@ func (p *InfradotsProvider) Resources(_ context.Context) []func() resource.Resou
 		NewOrganizationResource,
 		NewWorkspaceResource,
 		NewVariableResource,
+		NewVCSResource,
 	}
 }
 
@@ -104,5 +105,6 @@ func (p *InfradotsProvider) DataSources(_ context.Context) []func() datasource.D
 	return []func() datasource.DataSource{
 		NewOrganizationDataSource,
 		NewWorkspaceDataSource,
+		NewVCSDataSource,
 	}
 }

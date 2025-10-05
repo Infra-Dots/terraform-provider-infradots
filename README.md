@@ -9,6 +9,7 @@ This provider allows you to manage InfraDots resources using Terraform or OpenTo
 - **Organizations** - Create and manage organizational units
 - **Workspaces** - Manage Terraform/OpenTofu workspaces with Git integration
 - **Variables** - Configure workspace variables
+- **VCS** - Manage VCS (Version Control System) connections
 
 ## Requirements
 
@@ -116,6 +117,7 @@ data "infradots_workspace" "existing" {
 | [`infradots_organization`](docs/resources/organization.md) | Manage organizations |
 | [`infradots_workspace`](docs/resources/workspace.md) | Manage workspaces |
 | [`infradots_variable`](docs/resources/variable.md) | Manage workspace variables |
+| [`infradots_vcs`](docs/resources/vcs.md) | Manage VCS connections |
 
 ## Data Sources
 
@@ -123,6 +125,7 @@ data "infradots_workspace" "existing" {
 |-------------|-------------|
 | [`infradots_organization`](docs/data-sources/organization.md) | Query organizations |
 | [`infradots_workspace`](docs/data-sources/workspace.md) | Query workspaces |
+| [`infradots_vcs`](docs/data-sources/vcs.md) | Query VCS connections |
 
 ## Documentation
 
