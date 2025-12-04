@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -40,7 +41,16 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"branch": "main",
 			"terraform_version": "1.5.0",
 			"created_at": "2025-07-07T12:00:00Z",
-			"updated_at": "2025-07-07T12:00:00Z"
+			"updated_at": "2025-07-07T12:00:00Z",
+			"vcs": {
+				"id": "vcs-12345",
+				"name": "github-connection",
+				"vcs_type": "github",
+				"url": "https://github.com",
+				"description": "GitHub VCS connection",
+				"created_at": "2025-07-01T12:00:00Z",
+				"updated_at": "2025-07-01T12:00:00Z"
+			}
 		}`
 		resp.StatusCode = http.StatusCreated
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -57,7 +67,16 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"branch": "main",
 			"terraform_version": "1.5.0",
 			"created_at": "2025-07-07T12:00:00Z",
-			"updated_at": "2025-07-07T12:00:00Z"
+			"updated_at": "2025-07-07T12:00:00Z",
+			"vcs": {
+				"id": "vcs-12345",
+				"name": "github-connection",
+				"vcs_type": "github",
+				"url": "https://github.com",
+				"description": "GitHub VCS connection",
+				"created_at": "2025-07-01T12:00:00Z",
+				"updated_at": "2025-07-01T12:00:00Z"
+			}
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
 		return resp, nil
@@ -73,7 +92,16 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"branch": "develop",
 			"terraform_version": "1.6.0",
 			"created_at": "2025-07-07T12:00:00Z",
-			"updated_at": "2025-07-07T12:01:00Z"
+			"updated_at": "2025-07-07T12:01:00Z",
+			"vcs": {
+				"id": "vcs-12345",
+				"name": "github-connection",
+				"vcs_type": "github",
+				"url": "https://github.com",
+				"description": "GitHub VCS connection",
+				"created_at": "2025-07-01T12:00:00Z",
+				"updated_at": "2025-07-01T12:00:00Z"
+			}
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
 		return resp, nil
@@ -129,6 +157,15 @@ func TestWorkspaceResource_Create(t *testing.T) {
 	plan.Source = types.StringValue("https://github.com/test/repo")
 	plan.Branch = types.StringValue("main")
 	plan.TerraformVersion = types.StringValue("1.5.0")
+	plan.VCS = types.ObjectNull(map[string]attr.Type{
+		"id":          types.StringType,
+		"name":        types.StringType,
+		"vcs_type":    types.StringType,
+		"url":         types.StringType,
+		"description": types.StringType,
+		"created_at":  types.StringType,
+		"updated_at":  types.StringType,
+	})
 
 	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}
@@ -187,6 +224,15 @@ func TestWorkspaceResource_Read(t *testing.T) {
 	state.ID = types.StringValue("3f340e3c-89f1-4321-bcde-eff34567890a")
 	state.OrganizationName = types.StringValue("test-org")
 	state.Name = types.StringValue("test-workspace")
+	state.VCS = types.ObjectNull(map[string]attr.Type{
+		"id":          types.StringType,
+		"name":        types.StringType,
+		"vcs_type":    types.StringType,
+		"url":         types.StringType,
+		"description": types.StringType,
+		"created_at":  types.StringType,
+		"updated_at":  types.StringType,
+	})
 
 	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}
@@ -245,6 +291,15 @@ func TestWorkspaceResource_Update(t *testing.T) {
 	state.Source = types.StringValue("https://github.com/test/repo")
 	state.Branch = types.StringValue("main")
 	state.TerraformVersion = types.StringValue("1.5.0")
+	state.VCS = types.ObjectNull(map[string]attr.Type{
+		"id":          types.StringType,
+		"name":        types.StringType,
+		"vcs_type":    types.StringType,
+		"url":         types.StringType,
+		"description": types.StringType,
+		"created_at":  types.StringType,
+		"updated_at":  types.StringType,
+	})
 
 	// Setup planned new state
 	var plan WorkspaceResourceModel
@@ -255,6 +310,15 @@ func TestWorkspaceResource_Update(t *testing.T) {
 	plan.Source = types.StringValue("https://github.com/test/updated-repo")
 	plan.Branch = types.StringValue("develop")
 	plan.TerraformVersion = types.StringValue("1.6.0")
+	plan.VCS = types.ObjectNull(map[string]attr.Type{
+		"id":          types.StringType,
+		"name":        types.StringType,
+		"vcs_type":    types.StringType,
+		"url":         types.StringType,
+		"description": types.StringType,
+		"created_at":  types.StringType,
+		"updated_at":  types.StringType,
+	})
 
 	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}
@@ -319,6 +383,15 @@ func TestWorkspaceResource_Delete(t *testing.T) {
 	state.ID = types.StringValue("3f340e3c-89f1-4321-bcde-eff34567890a")
 	state.OrganizationName = types.StringValue("test-org")
 	state.Name = types.StringValue("test-workspace")
+	state.VCS = types.ObjectNull(map[string]attr.Type{
+		"id":          types.StringType,
+		"name":        types.StringType,
+		"vcs_type":    types.StringType,
+		"url":         types.StringType,
+		"description": types.StringType,
+		"created_at":  types.StringType,
+		"updated_at":  types.StringType,
+	})
 
 	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}
@@ -373,6 +446,8 @@ func TestWorkspaceResource_Schema(t *testing.T) {
 	assert.Contains(t, attrs, "terraform_version")
 	assert.Contains(t, attrs, "created_at")
 	assert.Contains(t, attrs, "updated_at")
+	assert.Contains(t, attrs, "vcs_id")
+	assert.Contains(t, attrs, "vcs")
 
 	// Check specific attribute properties
 	idAttr := attrs["id"].(schema.StringAttribute)
@@ -401,6 +476,21 @@ func TestWorkspaceResource_Schema(t *testing.T) {
 
 	updatedAtAttr := attrs["updated_at"].(schema.StringAttribute)
 	assert.True(t, updatedAtAttr.Computed)
+
+	// Check vcs_id attribute
+	vcsIdAttr := attrs["vcs_id"].(schema.StringAttribute)
+	assert.False(t, vcsIdAttr.Required)
+
+	// Check vcs nested attribute
+	vcsAttr := attrs["vcs"].(schema.SingleNestedAttribute)
+	assert.True(t, vcsAttr.Computed)
+	assert.Contains(t, vcsAttr.Attributes, "id")
+	assert.Contains(t, vcsAttr.Attributes, "name")
+	assert.Contains(t, vcsAttr.Attributes, "vcs_type")
+	assert.Contains(t, vcsAttr.Attributes, "url")
+	assert.Contains(t, vcsAttr.Attributes, "description")
+	assert.Contains(t, vcsAttr.Attributes, "created_at")
+	assert.Contains(t, vcsAttr.Attributes, "updated_at")
 }
 
 func TestWorkspaceResource_Metadata(t *testing.T) {

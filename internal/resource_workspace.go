@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -21,7 +22,6 @@ func NewWorkspaceResource() resource.Resource {
 	return &WorkspaceResource{}
 }
 
-// WorkspaceResourceModel maps a subset of fields from the django Workspace model.
 type WorkspaceResourceModel struct {
 	ID               types.String `tfsdk:"id"`                // UUID
 	OrganizationName types.String `tfsdk:"organization_name"` // Name of the organization
@@ -32,18 +32,20 @@ type WorkspaceResourceModel struct {
 	TerraformVersion types.String `tfsdk:"terraform_version"`
 	CreatedAt        types.String `tfsdk:"created_at"` // timestamp
 	UpdatedAt        types.String `tfsdk:"updated_at"` // timestamp
+	VcsId            types.String `tfsdk:"vcs_id"`     // UUID of a VCS provider in IDP
+	VCS              types.Object `tfsdk:"vcs"`        // VCS object as returned by API
 }
 
-// WorkspaceAPIResponse represents the JSON structure returned by the API
 type WorkspaceAPIResponse struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name"`
-	Description      string    `json:"description"`
-	Source           string    `json:"source"`
-	Branch           string    `json:"branch"`
-	TerraformVersion string    `json:"terraform_version"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               string          `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Source           string          `json:"source"`
+	Branch           string          `json:"branch"`
+	TerraformVersion string          `json:"terraform_version"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+	VCS              *VCSAPIResponse `json:"vcs"` // VCS object from API
 }
 
 // WorkspaceCreateRequest represents the JSON structure for creating a workspace
@@ -111,6 +113,44 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "The timestamp when the workspace was last updated.",
 				Computed:    true,
 			},
+			"vcs_id": schema.StringAttribute{
+				Description: "ID of a VCS Provider in infradots to connect to the workspace",
+				Required:    false,
+			},
+			"vcs": schema.SingleNestedAttribute{
+				Description: "VCS connection details associated with this workspace.",
+				Computed:    true,
+				Attributes: map[string]schema.Attribute{
+					"id": schema.StringAttribute{
+						Description: "The VCS unique ID (UUID).",
+						Computed:    true,
+					},
+					"name": schema.StringAttribute{
+						Description: "The name of the VCS connection.",
+						Computed:    true,
+					},
+					"vcs_type": schema.StringAttribute{
+						Description: "The type of VCS (e.g., github, gitlab, bitbucket).",
+						Computed:    true,
+					},
+					"url": schema.StringAttribute{
+						Description: "The URL of the VCS instance.",
+						Computed:    true,
+					},
+					"description": schema.StringAttribute{
+						Description: "A description of the VCS connection.",
+						Computed:    true,
+					},
+					"created_at": schema.StringAttribute{
+						Description: "The timestamp when the VCS was created.",
+						Computed:    true,
+					},
+					"updated_at": schema.StringAttribute{
+						Description: "The timestamp when the VCS was last updated.",
+						Computed:    true,
+					},
+				},
+			},
 		},
 	}
 }
@@ -121,6 +161,42 @@ func (r *WorkspaceResource) Configure(ctx context.Context, req resource.Configur
 			r.provider = provider
 		}
 	}
+}
+
+// Helper function to convert VCS API response to types.Object
+func vcsToObject(vcs *VCSAPIResponse) types.Object {
+	if vcs == nil {
+		return types.ObjectNull(map[string]attr.Type{
+			"id":          types.StringType,
+			"name":        types.StringType,
+			"vcs_type":    types.StringType,
+			"url":         types.StringType,
+			"description": types.StringType,
+			"created_at":  types.StringType,
+			"updated_at":  types.StringType,
+		})
+	}
+
+	return types.ObjectValueMust(
+		map[string]attr.Type{
+			"id":          types.StringType,
+			"name":        types.StringType,
+			"vcs_type":    types.StringType,
+			"url":         types.StringType,
+			"description": types.StringType,
+			"created_at":  types.StringType,
+			"updated_at":  types.StringType,
+		},
+		map[string]attr.Value{
+			"id":          types.StringValue(vcs.ID),
+			"name":        types.StringValue(vcs.Name),
+			"vcs_type":    types.StringValue(vcs.VcsType),
+			"url":         types.StringValue(vcs.URL),
+			"description": types.StringValue(vcs.Description),
+			"created_at":  types.StringValue(vcs.CreatedAt.Format(time.RFC3339)),
+			"updated_at":  types.StringValue(vcs.UpdatedAt.Format(time.RFC3339)),
+		},
+	)
 }
 
 func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -198,6 +274,7 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 	data.TerraformVersion = types.StringValue(workspace.TerraformVersion)
 	data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
+	data.VCS = vcsToObject(workspace.VCS)
 
 	// Save data back into Terraform state
 	diags = resp.State.Set(ctx, &data)
@@ -266,6 +343,7 @@ func (r *WorkspaceResource) Read(ctx context.Context, req resource.ReadRequest, 
 	data.TerraformVersion = types.StringValue(workspace.TerraformVersion)
 	data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
+	data.VCS = vcsToObject(workspace.VCS)
 
 	// Save (possibly updated) state
 	diags = resp.State.Set(ctx, &data)
@@ -369,6 +447,7 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 	plan.TerraformVersion = types.StringValue(workspace.TerraformVersion)
 	plan.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
 	plan.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
+	plan.VCS = vcsToObject(workspace.VCS)
 
 	// Save updated info
 	diags = resp.State.Set(ctx, &plan)

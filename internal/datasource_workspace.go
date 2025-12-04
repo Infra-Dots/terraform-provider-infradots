@@ -8,25 +8,22 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Ensure the implementation satisfies the expected interfaces.
 var _ datasource.DataSource = &WorkspaceDataSource{}
 
-// NewWorkspaceDataSource is a helper function to simplify the provider implementation.
 func NewWorkspaceDataSource() datasource.DataSource {
 	return &WorkspaceDataSource{}
 }
 
-// WorkspaceDataSource is the data source implementation.
 type WorkspaceDataSource struct {
 	provider *InfradotsProvider
 }
 
-// WorkspaceDataSourceModel maps the data source schema data.
 type WorkspaceDataSourceModel struct {
 	ID               types.String `tfsdk:"id"`
 	OrganizationName types.String `tfsdk:"organization_name"`
@@ -37,21 +34,19 @@ type WorkspaceDataSourceModel struct {
 	TerraformVersion types.String `tfsdk:"terraform_version"`
 	CreatedAt        types.String `tfsdk:"created_at"`
 	UpdatedAt        types.String `tfsdk:"updated_at"`
+	VCS              types.Object `tfsdk:"vcs"`
 }
 
-// WorkspaceDataSourceFilterModel maps the filter parameters.
 type WorkspaceDataSourceFilterModel struct {
 	ID               types.String `tfsdk:"id"`
 	OrganizationName types.String `tfsdk:"organization_name"`
 	Name             types.String `tfsdk:"name"`
 }
 
-// Metadata returns the data source type name.
 func (d *WorkspaceDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_workspace_data"
 }
 
-// Schema defines the schema for the data source.
 func (d *WorkspaceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Fetches a workspace by ID or by organization name and workspace name.",
@@ -95,11 +90,44 @@ func (d *WorkspaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				Description: "The timestamp when the workspace was last updated.",
 				Computed:    true,
 			},
+			"vcs": schema.SingleNestedAttribute{
+				Description: "VCS connection details associated with this workspace.",
+				Computed:    true,
+				Attributes: map[string]schema.Attribute{
+					"id": schema.StringAttribute{
+						Description: "The VCS unique ID (UUID).",
+						Computed:    true,
+					},
+					"name": schema.StringAttribute{
+						Description: "The name of the VCS connection.",
+						Computed:    true,
+					},
+					"vcs_type": schema.StringAttribute{
+						Description: "The type of VCS (e.g., github, gitlab, bitbucket).",
+						Computed:    true,
+					},
+					"url": schema.StringAttribute{
+						Description: "The URL of the VCS instance.",
+						Computed:    true,
+					},
+					"description": schema.StringAttribute{
+						Description: "A description of the VCS connection.",
+						Computed:    true,
+					},
+					"created_at": schema.StringAttribute{
+						Description: "The timestamp when the VCS was created.",
+						Computed:    true,
+					},
+					"updated_at": schema.StringAttribute{
+						Description: "The timestamp when the VCS was last updated.",
+						Computed:    true,
+					},
+				},
+			},
 		},
 	}
 }
 
-// Configure adds the provider configured client to the data source.
 func (d *WorkspaceDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -117,7 +145,42 @@ func (d *WorkspaceDataSource) Configure(_ context.Context, req datasource.Config
 	d.provider = provider
 }
 
-// Read fetches the data from the API.
+// Helper function to convert VCS API response to types.Object for data source
+func vcsToObjectDataSource(vcs *VCSAPIResponse) types.Object {
+	if vcs == nil {
+		return types.ObjectNull(map[string]attr.Type{
+			"id":          types.StringType,
+			"name":        types.StringType,
+			"vcs_type":    types.StringType,
+			"url":         types.StringType,
+			"description": types.StringType,
+			"created_at":  types.StringType,
+			"updated_at":  types.StringType,
+		})
+	}
+
+	return types.ObjectValueMust(
+		map[string]attr.Type{
+			"id":          types.StringType,
+			"name":        types.StringType,
+			"vcs_type":    types.StringType,
+			"url":         types.StringType,
+			"description": types.StringType,
+			"created_at":  types.StringType,
+			"updated_at":  types.StringType,
+		},
+		map[string]attr.Value{
+			"id":          types.StringValue(vcs.ID),
+			"name":        types.StringValue(vcs.Name),
+			"vcs_type":    types.StringValue(vcs.VcsType),
+			"url":         types.StringValue(vcs.URL),
+			"description": types.StringValue(vcs.Description),
+			"created_at":  types.StringValue(vcs.CreatedAt.Format(time.RFC3339)),
+			"updated_at":  types.StringValue(vcs.UpdatedAt.Format(time.RFC3339)),
+		},
+	)
+}
+
 func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var data WorkspaceDataSourceModel
 	var filter WorkspaceDataSourceFilterModel
@@ -156,13 +219,11 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 			filter.ID.ValueString())
 	} else {
 		// Fetch by organization name and workspace name
-		// First get all workspaces for the organization, then filter by name
 		url = fmt.Sprintf("http://%s/api/organizations/%s/workspaces/",
 			d.provider.host,
 			filter.OrganizationName.ValueString())
 	}
 
-	// Create HTTP request
 	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating request", err.Error())
@@ -214,6 +275,7 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 		data.TerraformVersion = types.StringValue(apiResp.TerraformVersion)
 		data.CreatedAt = types.StringValue(apiResp.CreatedAt.Format(time.RFC3339))
 		data.UpdatedAt = types.StringValue(apiResp.UpdatedAt.Format(time.RFC3339))
+		data.VCS = vcsToObjectDataSource(apiResp.VCS)
 	} else {
 		// List of workspaces, filter by name
 		var apiRespList []WorkspaceAPIResponse
@@ -236,6 +298,7 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 				data.TerraformVersion = types.StringValue(workspace.TerraformVersion)
 				data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
 				data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
+				data.VCS = vcsToObjectDataSource(workspace.VCS)
 				found = true
 				break
 			}
