@@ -44,3 +44,11 @@ resource "infradots_variable" "example" {
 * `terraform_version` - Terraform version used.
 * `created_at` - The timestamp when the workspace was created.
 * `updated_at` - The timestamp when the workspace was last updated.
+* `vcs` - VCS connection details associated with this workspace. This is a nested object with the following attributes:
+  * `id` - The VCS unique ID (UUID).
+  * `name` - The name of the VCS connection.
+  * `vcs_type` - The type of VCS (e.g., github, gitlab, bitbucket).
+  * `url` - The URL of the VCS instance.
+  * `description` - A description of the VCS connection.
+  * `created_at` - The timestamp when the VCS was created.
+  * `updated_at` - The timestamp when the VCS was last updated.

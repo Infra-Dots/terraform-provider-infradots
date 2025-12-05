@@ -47,6 +47,8 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 				"name": "github-connection",
 				"vcs_type": "github",
 				"url": "https://github.com",
+				"clientId": "test-client-id",
+				"clientSecret": "test-client-secret",
 				"description": "GitHub VCS connection",
 				"created_at": "2025-07-01T12:00:00Z",
 				"updated_at": "2025-07-01T12:00:00Z"
@@ -73,6 +75,8 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 				"name": "github-connection",
 				"vcs_type": "github",
 				"url": "https://github.com",
+				"clientId": "test-client-id",
+				"clientSecret": "test-client-secret",
 				"description": "GitHub VCS connection",
 				"created_at": "2025-07-01T12:00:00Z",
 				"updated_at": "2025-07-01T12:00:00Z"
@@ -98,6 +102,8 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 				"name": "github-connection",
 				"vcs_type": "github",
 				"url": "https://github.com",
+				"clientId": "test-client-id",
+				"clientSecret": "test-client-secret",
 				"description": "GitHub VCS connection",
 				"created_at": "2025-07-01T12:00:00Z",
 				"updated_at": "2025-07-01T12:00:00Z"

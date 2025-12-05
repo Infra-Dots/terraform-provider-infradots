@@ -25,6 +25,7 @@ The following arguments are supported:
 * `source` - (Required) Source repository URL or path.
 * `branch` - (Required) Git branch to use.
 * `terraform_version` - (Required) Terraform version to use for this workspace.
+* `vcs_id` - (Optional) ID of a VCS Provider in infradots to connect to the workspace.
 
 ## Attributes Reference
 
@@ -33,6 +34,14 @@ In addition to all arguments above, the following attributes are exported:
 * `id` - The ID of the workspace (UUID).
 * `created_at` - The timestamp when the workspace was created (RFC3339 format).
 * `updated_at` - The timestamp when the workspace was last updated (RFC3339 format).
+* `vcs` - VCS connection details associated with this workspace. This is a nested object with the following attributes:
+  * `id` - The VCS unique ID (UUID).
+  * `name` - The name of the VCS connection.
+  * `vcs_type` - The type of VCS (e.g., github, gitlab, bitbucket).
+  * `url` - The URL of the VCS instance.
+  * `description` - A description of the VCS connection.
+  * `created_at` - The timestamp when the VCS was created.
+  * `updated_at` - The timestamp when the VCS was last updated.
 
 ## Import
 

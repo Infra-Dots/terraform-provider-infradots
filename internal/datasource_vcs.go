@@ -33,7 +33,7 @@ type VCSDataSourceModel struct {
 	Name             types.String `tfsdk:"name"`
 	VcsType          types.String `tfsdk:"vcs_type"`
 	URL              types.String `tfsdk:"url"`
-	Token            types.String `tfsdk:"token"`
+	ClientId         types.String `tfsdk:"clientId"`
 	Description      types.String `tfsdk:"description"`
 	CreatedAt        types.String `tfsdk:"created_at"`
 	UpdatedAt        types.String `tfsdk:"updated_at"`
@@ -79,10 +79,9 @@ func (d *VCSDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 				Description: "The URL of the VCS instance.",
 				Computed:    true,
 			},
-			"token": schema.StringAttribute{
-				Description: "The access token for the VCS.",
+			"clientId": schema.StringAttribute{
+				Description: "The client ID for the VCS.",
 				Computed:    true,
-				Sensitive:   true,
 			},
 			"description": schema.StringAttribute{
 				Description: "A description of the VCS connection.",
@@ -211,7 +210,7 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		data.Name = types.StringValue(apiResp.Name)
 		data.VcsType = types.StringValue(apiResp.VcsType)
 		data.URL = types.StringValue(apiResp.URL)
-		data.Token = types.StringValue(apiResp.Token)
+		data.ClientId = types.StringValue(apiResp.ClientId)
 		data.Description = types.StringValue(apiResp.Description)
 		data.CreatedAt = types.StringValue(apiResp.CreatedAt.Format(time.RFC3339))
 		data.UpdatedAt = types.StringValue(apiResp.UpdatedAt.Format(time.RFC3339))
@@ -233,7 +232,7 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 				data.Name = types.StringValue(vcs.Name)
 				data.VcsType = types.StringValue(vcs.VcsType)
 				data.URL = types.StringValue(vcs.URL)
-				data.Token = types.StringValue(vcs.Token)
+				data.ClientId = types.StringValue(vcs.ClientId)
 				data.Description = types.StringValue(vcs.Description)
 				data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 				data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))

@@ -37,7 +37,7 @@ func (m *MockVCSRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			"name": "test-vcs",
 			"vcs_type": "github",
 			"url": "https://github.com",
-			"token": "ghp_test_token",
+			"clientId": "test-client-id",
 			"description": "Test VCS connection for GitHub",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:00:00Z"
@@ -54,7 +54,7 @@ func (m *MockVCSRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			"name": "test-vcs",
 			"vcs_type": "github",
 			"url": "https://github.com",
-			"token": "ghp_test_token",
+			"clientId": "test-client-id",
 			"description": "Test VCS connection for GitHub",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:00:00Z"
@@ -70,7 +70,7 @@ func (m *MockVCSRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			"name": "updated-vcs",
 			"vcs_type": "gitlab",
 			"url": "https://gitlab.com",
-			"token": "glpat_test_token",
+			"clientId": "updated-client-id",
 			"description": "Updated VCS connection for GitLab",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:01:00Z"
@@ -127,7 +127,8 @@ func TestVCSResource_Create(t *testing.T) {
 	plan.Name = types.StringValue("test-vcs")
 	plan.VcsType = types.StringValue("github")
 	plan.URL = types.StringValue("https://github.com")
-	plan.Token = types.StringValue("ghp_test_token")
+	plan.ClientId = types.StringValue("test-client-id")
+	plan.ClientSecret = types.StringValue("test-client-secret")
 	plan.Description = types.StringValue("Test VCS connection for GitHub")
 
 	// Create request/response objects
@@ -170,7 +171,7 @@ func TestVCSResource_Create(t *testing.T) {
 	assert.Equal(t, "test-vcs", state.Name.ValueString())
 	assert.Equal(t, "github", state.VcsType.ValueString())
 	assert.Equal(t, "https://github.com", state.URL.ValueString())
-	assert.Equal(t, "ghp_test_token", state.Token.ValueString())
+	assert.Equal(t, "test-client-id", state.ClientId.ValueString())
 	assert.Equal(t, "Test VCS connection for GitHub", state.Description.ValueString())
 	assert.Equal(t, "2025-07-07T12:00:00Z", state.CreatedAt.ValueString())
 	assert.Equal(t, "2025-07-07T12:00:00Z", state.UpdatedAt.ValueString())
@@ -226,7 +227,7 @@ func TestVCSResource_Read(t *testing.T) {
 	assert.Equal(t, "test-vcs", newState.Name.ValueString())
 	assert.Equal(t, "github", newState.VcsType.ValueString())
 	assert.Equal(t, "https://github.com", newState.URL.ValueString())
-	assert.Equal(t, "ghp_test_token", newState.Token.ValueString())
+	assert.Equal(t, "test-client-id", newState.ClientId.ValueString())
 	assert.Equal(t, "Test VCS connection for GitHub", newState.Description.ValueString())
 }
 
@@ -243,7 +244,8 @@ func TestVCSResource_Update(t *testing.T) {
 	state.Name = types.StringValue("test-vcs")
 	state.VcsType = types.StringValue("github")
 	state.URL = types.StringValue("https://github.com")
-	state.Token = types.StringValue("ghp_test_token")
+	state.ClientId = types.StringValue("test-client-id")
+	state.ClientSecret = types.StringValue("test-client-secret")
 	state.Description = types.StringValue("Test VCS connection for GitHub")
 
 	// Setup planned new state
@@ -253,7 +255,8 @@ func TestVCSResource_Update(t *testing.T) {
 	plan.Name = types.StringValue("updated-vcs")
 	plan.VcsType = types.StringValue("gitlab")
 	plan.URL = types.StringValue("https://gitlab.com")
-	plan.Token = types.StringValue("glpat_test_token")
+	plan.ClientId = types.StringValue("updated-client-id")
+	plan.ClientSecret = types.StringValue("updated-client-secret")
 	plan.Description = types.StringValue("Updated VCS connection for GitLab")
 
 	// Create request/response objects
@@ -303,7 +306,7 @@ func TestVCSResource_Update(t *testing.T) {
 	assert.Equal(t, "updated-vcs", newState.Name.ValueString())
 	assert.Equal(t, "gitlab", newState.VcsType.ValueString())
 	assert.Equal(t, "https://gitlab.com", newState.URL.ValueString())
-	assert.Equal(t, "glpat_test_token", newState.Token.ValueString())
+	assert.Equal(t, "updated-client-id", newState.ClientId.ValueString())
 	assert.Equal(t, "Updated VCS connection for GitLab", newState.Description.ValueString())
 	assert.Equal(t, "2025-07-07T12:01:00Z", newState.UpdatedAt.ValueString())
 }
@@ -369,7 +372,8 @@ func TestVCSResource_Schema(t *testing.T) {
 	assert.Contains(t, attrs, "name")
 	assert.Contains(t, attrs, "vcs_type")
 	assert.Contains(t, attrs, "url")
-	assert.Contains(t, attrs, "token")
+	assert.Contains(t, attrs, "client_id")
+	assert.Contains(t, attrs, "client_secret")
 	assert.Contains(t, attrs, "description")
 	assert.Contains(t, attrs, "created_at")
 	assert.Contains(t, attrs, "updated_at")
@@ -390,9 +394,12 @@ func TestVCSResource_Schema(t *testing.T) {
 	urlAttr := attrs["url"].(schema.StringAttribute)
 	assert.True(t, urlAttr.Required)
 
-	tokenAttr := attrs["token"].(schema.StringAttribute)
-	assert.True(t, tokenAttr.Required)
-	assert.True(t, tokenAttr.Sensitive)
+	clientIdAttr := attrs["client_id"].(schema.StringAttribute)
+	assert.True(t, clientIdAttr.Required)
+
+	clientSecretAttr := attrs["client_secret"].(schema.StringAttribute)
+	assert.True(t, clientSecretAttr.Required)
+	assert.True(t, clientSecretAttr.Sensitive)
 
 	descAttr := attrs["description"].(schema.StringAttribute)
 	assert.True(t, descAttr.Optional)

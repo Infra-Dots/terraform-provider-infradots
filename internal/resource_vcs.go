@@ -31,7 +31,8 @@ type VCSResourceModel struct {
 	Name             types.String `tfsdk:"name"`              // VCS name
 	VcsType          types.String `tfsdk:"vcs_type"`          // VCS type (e.g., "github", "gitlab", "bitbucket")
 	URL              types.String `tfsdk:"url"`               // VCS URL
-	Token            types.String `tfsdk:"token"`             // VCS access token
+	ClientId         types.String `tfsdk:"client_id"`         // VCS Client ID
+	ClientSecret     types.String `tfsdk:"client_secret"`     // VCS Client Secret
 	Description      types.String `tfsdk:"description"`       // Optional description
 	CreatedAt        types.String `tfsdk:"created_at"`        // Timestamp
 	UpdatedAt        types.String `tfsdk:"updated_at"`        // Timestamp
@@ -43,7 +44,7 @@ type VCSAPIResponse struct {
 	Name        string    `json:"name"`
 	VcsType     string    `json:"vcs_type"`
 	URL         string    `json:"url"`
-	Token       string    `json:"token"`
+	ClientId    string    `json:"clientId"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -51,20 +52,22 @@ type VCSAPIResponse struct {
 
 // VCSCreateRequest represents the JSON structure for creating a VCS
 type VCSCreateRequest struct {
-	Name        string `json:"name"`
-	VcsType     string `json:"vcs_type"`
-	URL         string `json:"url"`
-	Token       string `json:"token"`
-	Description string `json:"description,omitempty"`
+	Name         string `json:"name"`
+	VcsType      string `json:"vcs_type"`
+	URL          string `json:"url"`
+	ClientId     string `json:"clientId"`
+	ClientSecret string `json:"clientSecret"`
+	Description  string `json:"description,omitempty"`
 }
 
 // VCSUpdateRequest represents the JSON structure for updating a VCS
 type VCSUpdateRequest struct {
-	Name        string `json:"name,omitempty"`
-	VcsType     string `json:"vcs_type,omitempty"`
-	URL         string `json:"url,omitempty"`
-	Token       string `json:"token,omitempty"`
-	Description string `json:"description,omitempty"`
+	Name         string `json:"name,omitempty"`
+	VcsType      string `json:"vcs_type,omitempty"`
+	URL          string `json:"url,omitempty"`
+	ClientId     string `json:"clientId,omitempty"`
+	ClientSecret string `json:"clientSecret,omitempty"`
+	Description  string `json:"description,omitempty"`
 }
 
 type VCSResource struct {
@@ -101,8 +104,13 @@ func (r *VCSResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Description: "The URL of the VCS instance.",
 				Required:    true,
 			},
-			"token": schema.StringAttribute{
-				Description: "The access token for the VCS.",
+			"client_id": schema.StringAttribute{
+				Description: "The client ID for the VCS.",
+				Required:    true,
+				Sensitive:   false,
+			},
+			"client_secret": schema.StringAttribute{
+				Description: "The client secret token for the VCS.",
 				Required:    true,
 				Sensitive:   true,
 			},
@@ -142,11 +150,12 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	// Prepare the request
 	createReq := VCSCreateRequest{
-		Name:        data.Name.ValueString(),
-		VcsType:     data.VcsType.ValueString(),
-		URL:         data.URL.ValueString(),
-		Token:       data.Token.ValueString(),
-		Description: data.Description.ValueString(),
+		Name:         data.Name.ValueString(),
+		VcsType:      data.VcsType.ValueString(),
+		URL:          data.URL.ValueString(),
+		ClientId:     data.ClientId.ValueString(),
+		ClientSecret: data.ClientSecret.ValueString(),
+		Description:  data.Description.ValueString(),
 	}
 
 	reqBody, err := json.Marshal(createReq)
@@ -198,12 +207,12 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	// Update the model with the response data
 	data.ID = types.StringValue(vcs.ID)
 	data.Name = types.StringValue(vcs.Name)
 	data.VcsType = types.StringValue(vcs.VcsType)
 	data.URL = types.StringValue(vcs.URL)
-	data.Token = types.StringValue(vcs.Token)
+	data.ClientId = types.StringValue(vcs.ClientId)
+	// clientSecret is write-only, not returned by API, keep existing value in state
 	data.Description = types.StringValue(vcs.Description)
 	data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
@@ -271,7 +280,8 @@ func (r *VCSResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	data.Name = types.StringValue(vcs.Name)
 	data.VcsType = types.StringValue(vcs.VcsType)
 	data.URL = types.StringValue(vcs.URL)
-	data.Token = types.StringValue(vcs.Token)
+	data.ClientId = types.StringValue(vcs.ClientId)
+	// clientSecret is write-only, not returned by API, keep existing value in state
 	data.Description = types.StringValue(vcs.Description)
 	data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
@@ -311,8 +321,11 @@ func (r *VCSResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		updateReq.URL = plan.URL.ValueString()
 	}
 
-	if !plan.Token.Equal(state.Token) {
-		updateReq.Token = plan.Token.ValueString()
+	if !plan.ClientId.Equal(state.ClientId) {
+		updateReq.ClientId = plan.ClientId.ValueString()
+	}
+	if !plan.ClientSecret.Equal(state.ClientSecret) {
+		updateReq.ClientSecret = plan.ClientSecret.ValueString()
 	}
 
 	if !plan.Description.Equal(state.Description) {
@@ -374,7 +387,8 @@ func (r *VCSResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	plan.Name = types.StringValue(vcs.Name)
 	plan.VcsType = types.StringValue(vcs.VcsType)
 	plan.URL = types.StringValue(vcs.URL)
-	plan.Token = types.StringValue(vcs.Token)
+	plan.ClientId = types.StringValue(vcs.ClientId)
+	// clientSecret is write-only, not returned by API, keep value from plan
 	plan.Description = types.StringValue(vcs.Description)
 	plan.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	plan.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))

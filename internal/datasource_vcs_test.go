@@ -35,7 +35,7 @@ func (m *MockVCSDataSourceRoundTripper) RoundTrip(req *http.Request) (*http.Resp
 			"name": "test-vcs",
 			"vcs_type": "github",
 			"url": "https://github.com",
-			"token": "ghp_test_token",
+			"clientId": "test-client-id",
 			"description": "Test VCS connection for GitHub",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:00:00Z"
@@ -51,7 +51,7 @@ func (m *MockVCSDataSourceRoundTripper) RoundTrip(req *http.Request) (*http.Resp
 			"name": "test-vcs",
 			"vcs_type": "github",
 			"url": "https://github.com",
-			"token": "ghp_test_token",
+			"clientId": "test-client-id",
 			"description": "Test VCS connection for GitHub",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:00:00Z"
@@ -60,7 +60,7 @@ func (m *MockVCSDataSourceRoundTripper) RoundTrip(req *http.Request) (*http.Resp
 			"name": "gitlab-vcs",
 			"vcs_type": "gitlab",
 			"url": "https://gitlab.com",
-			"token": "glpat_test_token",
+			"clientId": "gitlab-client-id",
 			"description": "GitLab VCS connection",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:00:00Z"
@@ -114,7 +114,7 @@ func TestVCSDataSource_Schema(t *testing.T) {
 	assert.Contains(t, attrs, "name")
 	assert.Contains(t, attrs, "vcs_type")
 	assert.Contains(t, attrs, "url")
-	assert.Contains(t, attrs, "token")
+	assert.Contains(t, attrs, "clientId")
 	assert.Contains(t, attrs, "description")
 	assert.Contains(t, attrs, "created_at")
 	assert.Contains(t, attrs, "updated_at")
@@ -138,9 +138,8 @@ func TestVCSDataSource_Schema(t *testing.T) {
 	urlAttr := attrs["url"].(schema.StringAttribute)
 	assert.True(t, urlAttr.Computed)
 
-	tokenAttr := attrs["token"].(schema.StringAttribute)
-	assert.True(t, tokenAttr.Computed)
-	assert.True(t, tokenAttr.Sensitive)
+	clientIdAttr := attrs["clientId"].(schema.StringAttribute)
+	assert.True(t, clientIdAttr.Computed)
 
 	descAttr := attrs["description"].(schema.StringAttribute)
 	assert.True(t, descAttr.Computed)
