@@ -40,7 +40,9 @@ resource "infradots_workspace" "example" {
 * `name` - The name of the VCS connection.
 * `vcs_type` - The type of VCS (e.g., github, gitlab, bitbucket).
 * `url` - The URL of the VCS instance.
-* `token` - The access token for the VCS.
+* `clientId` - The OAuth client ID for the VCS.
 * `description` - A description of the VCS connection.
 * `created_at` - The timestamp when the VCS connection was created.
 * `updated_at` - The timestamp when the VCS connection was last updated.
+
+**Note:** `clientSecret` is not exposed in the data source as it is write-only and sensitive.
