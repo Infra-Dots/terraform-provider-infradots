@@ -224,7 +224,7 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	// POST to /api/organizations/{organization_name}/workspaces/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/workspaces/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/workspaces/",
 		r.provider.host,
 		data.OrganizationName.ValueString())
 
@@ -290,11 +290,11 @@ func (r *WorkspaceResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	// GET from /api/organizations/{organization_name}/workspaces/{workspace_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/workspaces/%s/",
+	// GET from /api/organizations/{organization_name}/workspaces/{workspace_name}/
+	url := fmt.Sprintf("https://%s/api/organizations/%s/workspaces/%s/",
 		r.provider.host,
 		data.OrganizationName.ValueString(),
-		data.ID.ValueString())
+		data.Name.ValueString())
 
 	reqHttp, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -395,11 +395,12 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	// PATCH to /api/organizations/{organization_name}/workspaces/{workspace_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/workspaces/%s/",
+	// PATCH to /api/organizations/{organization_name}/workspaces/{workspace_name}/
+	// Use state name (current name) for the URL, not plan name (which might be changing)
+	url := fmt.Sprintf("https://%s/api/organizations/%s/workspaces/%s/",
 		r.provider.host,
 		plan.OrganizationName.ValueString(),
-		plan.ID.ValueString())
+		state.Name.ValueString())
 
 	reqHttp, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(string(reqBody)))
 	if err != nil {
@@ -463,11 +464,11 @@ func (r *WorkspaceResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	// DELETE from /api/organizations/{organization_name}/workspaces/{workspace_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/workspaces/%s/",
+	// DELETE from /api/organizations/{organization_name}/workspaces/{workspace_name}/
+	url := fmt.Sprintf("https://%s/api/organizations/%s/workspaces/%s/",
 		r.provider.host,
 		data.OrganizationName.ValueString(),
-		data.ID.ValueString())
+		data.Name.ValueString())
 
 	reqHttp, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
@@ -500,4 +501,100 @@ func (r *WorkspaceResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	// Remove resource from state
 	resp.State.RemoveResource(ctx)
+}
+
+func (r *WorkspaceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID: format is "organization_name:workspace_name"
+	parts := strings.Split(req.ID, ":")
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid import ID format",
+			"Import ID must be in the format 'organization_name:workspace_name'",
+		)
+		return
+	}
+
+	organizationName := parts[0]
+	workspaceName := parts[1]
+
+	// Use the list endpoint and filter by name (same approach as datasource)
+	url := fmt.Sprintf("https://%s/api/organizations/%s/workspaces/",
+		r.provider.host,
+		organizationName)
+
+	reqHttp, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating request", err.Error())
+		return
+	}
+	reqHttp.Header.Set("Authorization", "Bearer "+r.provider.token)
+
+	httpResp, err := r.provider.client.Do(reqHttp)
+	if err != nil {
+		resp.Diagnostics.AddError("HTTP request failed", err.Error())
+		return
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError(
+			"Failed to fetch workspaces",
+			fmt.Sprintf("Status code: %d, Body: %s", httpResp.StatusCode, string(respBody)),
+		)
+		return
+	}
+
+	// Read and parse the response body (list of workspaces)
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading response body", err.Error())
+		return
+	}
+
+	var workspaces []WorkspaceAPIResponse
+	err = json.Unmarshal(respBody, &workspaces)
+	if err != nil {
+		resp.Diagnostics.AddError("Error parsing response", err.Error())
+		return
+	}
+
+	// Find the workspace by name
+	var workspace *WorkspaceAPIResponse
+	found := false
+	for i := range workspaces {
+		if workspaces[i].Name == workspaceName {
+			workspace = &workspaces[i]
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		resp.Diagnostics.AddError(
+			"Workspace not found",
+			fmt.Sprintf("No workspace with name '%s' found in organization '%s'", workspaceName, organizationName),
+		)
+		return
+	}
+
+	// Create the state model with the fetched data
+	// Match the exact pattern used in Read method
+	var data WorkspaceResourceModel
+	data.ID = types.StringValue(workspace.ID)
+	data.OrganizationName = types.StringValue(organizationName)
+	data.Name = types.StringValue(workspace.Name)
+	data.Description = types.StringValue(workspace.Description)
+	data.Source = types.StringValue(workspace.Source)
+	data.Branch = types.StringValue(workspace.Branch)
+	data.TerraformVersion = types.StringValue(workspace.TerraformVersion)
+	data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
+	data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
+	data.VCS = vcsToObject(workspace.VCS)
+	// Note: VcsId is not set here, matching the Read method pattern
+	// VcsId is only used for input during create/update operations
+
+	// Set the state
+	diags := resp.State.Set(ctx, &data)
+	resp.Diagnostics.Append(diags...)
 }

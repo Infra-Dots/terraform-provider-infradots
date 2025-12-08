@@ -37,6 +37,7 @@ type VariableResourceModel struct {
 	HCL              types.Bool   `tfsdk:"hcl"`               // Whether to parse the value as HCL
 	CreatedAt        types.String `tfsdk:"created_at"`        // Timestamp
 	UpdatedAt        types.String `tfsdk:"updated_at"`        // Timestamp
+	Workspace        types.String `tfsdk:"workspace"`
 }
 
 // VariableAPIResponse represents the JSON structure returned by the API
@@ -50,6 +51,7 @@ type VariableAPIResponse struct {
 	HCL         bool      `json:"hcl"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	Workspace   string    `json:"workspace"`
 }
 
 // VariableCreateRequest represents the JSON structure for creating a variable
@@ -60,6 +62,7 @@ type VariableCreateRequest struct {
 	Category    string `json:"category,omitempty"`
 	Sensitive   bool   `json:"sensitive,omitempty"`
 	HCL         bool   `json:"hcl,omitempty"`
+	Workspace   string `json:"workspace"`
 }
 
 // VariableUpdateRequest represents the JSON structure for updating a variable
@@ -135,6 +138,11 @@ func (r *VariableResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Description: "The timestamp when the variable was last updated.",
 				Computed:    true,
 			},
+			"workspace": schema.StringAttribute{
+				Description: "Workspace of the variable",
+				Optional:    true,
+				Computed:    true,
+			},
 		},
 	}
 }
@@ -172,7 +180,7 @@ func (r *VariableResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	// POST to /api/organizations/{organization_name}/variables/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/variables/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/variables/",
 		r.provider.host,
 		data.OrganizationName.ValueString())
 
@@ -239,7 +247,7 @@ func (r *VariableResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 
 	// GET from /api/organizations/{organization_name}/variables/{variable_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/variables/%s/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/variables/%s/",
 		r.provider.host,
 		data.OrganizationName.ValueString(),
 		data.ID.ValueString())
@@ -350,7 +358,7 @@ func (r *VariableResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	// PATCH to /api/organizations/{organization_name}/variables/{variable_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/variables/%s/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/variables/%s/",
 		r.provider.host,
 		plan.OrganizationName.ValueString(),
 		plan.ID.ValueString())
@@ -418,7 +426,7 @@ func (r *VariableResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	// DELETE from /api/organizations/{organization_name}/variables/{variable_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/variables/%s/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/variables/%s/",
 		r.provider.host,
 		data.OrganizationName.ValueString(),
 		data.ID.ValueString())
@@ -454,4 +462,129 @@ func (r *VariableResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	// Remove resource from state
 	resp.State.RemoveResource(ctx)
+}
+
+func (r *VariableResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID:
+	// Format 1: "organization_name:variable_key" for organization-level variables
+	// Format 2: "organization_name:workspace_name:variable_key" for workspace-level variables
+	parts := strings.Split(req.ID, ":")
+	if len(parts) != 2 && len(parts) != 3 {
+		resp.Diagnostics.AddError(
+			"Invalid import ID format",
+			"Import ID must be in the format 'organization_name:variable_key' for organization variables or 'organization_name:workspace_name:variable_key' for workspace variables",
+		)
+		return
+	}
+
+	organizationName := parts[0]
+	var workspaceName string
+	var variableKey string
+	var url string
+
+	if len(parts) == 2 {
+		// Organization-level variable
+		variableKey = parts[1]
+		url = fmt.Sprintf("https://%s/api/organizations/%s/variables/",
+			r.provider.host,
+			organizationName)
+	} else {
+		// Workspace-level variable
+		workspaceName = parts[1]
+		variableKey = parts[2]
+		url = fmt.Sprintf("https://%s/api/organizations/%s/workspaces/%s/variables/",
+			r.provider.host,
+			organizationName,
+			workspaceName)
+	}
+
+	reqHttp, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating request", err.Error())
+		return
+	}
+	reqHttp.Header.Set("Authorization", "Bearer "+r.provider.token)
+
+	httpResp, err := r.provider.client.Do(reqHttp)
+	if err != nil {
+		resp.Diagnostics.AddError("HTTP request failed", err.Error())
+		return
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(httpResp.Body)
+		var location string
+		if len(parts) == 2 {
+			location = fmt.Sprintf("organization '%s'", organizationName)
+		} else {
+			location = fmt.Sprintf("workspace '%s' in organization '%s'", workspaceName, organizationName)
+		}
+		resp.Diagnostics.AddError(
+			"Failed to fetch variables",
+			fmt.Sprintf("Status code: %d, Body: %s (Location: %s)", httpResp.StatusCode, string(respBody), location),
+		)
+		return
+	}
+
+	// Read and parse the response body (list of variables)
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading response body", err.Error())
+		return
+	}
+
+	var variables []VariableAPIResponse
+	err = json.Unmarshal(respBody, &variables)
+	if err != nil {
+		resp.Diagnostics.AddError("Error parsing response", err.Error())
+		return
+	}
+
+	// Find the variable by key
+	var variable *VariableAPIResponse
+	found := false
+	for i := range variables {
+		if variables[i].Key == variableKey {
+			variable = &variables[i]
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		var location string
+		if len(parts) == 2 {
+			location = fmt.Sprintf("organization '%s'", organizationName)
+		} else {
+			location = fmt.Sprintf("workspace '%s' in organization '%s'", workspaceName, organizationName)
+		}
+		resp.Diagnostics.AddError(
+			"Variable not found",
+			fmt.Sprintf("No variable with key '%s' found in %s", variableKey, location),
+		)
+		return
+	}
+
+	// Create the state model with the fetched data
+	var data VariableResourceModel
+	data.ID = types.StringValue(variable.ID)
+	data.OrganizationName = types.StringValue(organizationName)
+	data.Key = types.StringValue(variable.Key)
+	data.Value = types.StringValue(variable.Value)
+	data.Description = types.StringValue(variable.Description)
+	data.Category = types.StringValue(variable.Category)
+	data.Sensitive = types.BoolValue(variable.Sensitive)
+	data.HCL = types.BoolValue(variable.HCL)
+	data.CreatedAt = types.StringValue(variable.CreatedAt.Format(time.RFC3339))
+	data.UpdatedAt = types.StringValue(variable.UpdatedAt.Format(time.RFC3339))
+	if variable.Workspace != "" {
+		data.Workspace = types.StringValue(variable.Workspace)
+	} else {
+		data.Workspace = types.StringNull()
+	}
+
+	// Set the state
+	diags := resp.State.Set(ctx, &data)
+	resp.Diagnostics.Append(diags...)
 }

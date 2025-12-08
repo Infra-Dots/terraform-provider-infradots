@@ -77,8 +77,12 @@ func (p *InfradotsProvider) Configure(ctx context.Context, req provider.Configur
 	transport := &http.Transport{
 		TLSClientConfig: tlsConfig,
 	}
-	httpClient := &http.Client{Transport: transport}
-
+	httpClient := &http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	p.client = httpClient
 	if config.Hostname.IsNull() {
 		p.host = "api.infradots.com"
@@ -88,6 +92,9 @@ func (p *InfradotsProvider) Configure(ctx context.Context, req provider.Configur
 
 	p.token = config.Token.ValueString()
 	tflog.Info(ctx, "Creating infradots client information", map[string]any{"success": true})
+
+	resp.ResourceData = p
+	resp.DataSourceData = p
 }
 
 // Resources returns the list of resource implementations.

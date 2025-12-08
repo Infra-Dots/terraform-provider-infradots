@@ -89,6 +89,42 @@ func (m *MockVariableRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 		return resp, nil
 	}
 
+	// Handle Import - List organization variables (GET to /api/organizations/{org_name}/variables/)
+	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/variables/") && !strings.Contains(url, "/variables/4f450f4d") && !strings.Contains(url, "/workspaces/") {
+		jsonResp := `[{
+			"id": "4f450f4d-9af2-5432-cdef-f0045678901b",
+			"key": "test-variable",
+			"value": "test-value",
+			"description": "Test variable for Terraform",
+			"category": "terraform",
+			"sensitive": false,
+			"hcl": false,
+			"created_at": "2025-07-07T12:00:00Z",
+			"updated_at": "2025-07-07T12:00:00Z",
+			"workspace": ""
+		}]`
+		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
+		return resp, nil
+	}
+
+	// Handle Import - List workspace variables (GET to /api/organizations/{org_name}/workspaces/{workspace_name}/variables/)
+	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/workspaces/test-workspace/variables/") {
+		jsonResp := `[{
+			"id": "5f550f5e-0bf3-6543-defg-g1156789012c",
+			"key": "workspace-variable",
+			"value": "workspace-value",
+			"description": "Test workspace variable",
+			"category": "env",
+			"sensitive": true,
+			"hcl": false,
+			"created_at": "2025-07-07T12:00:00Z",
+			"updated_at": "2025-07-07T12:00:00Z",
+			"workspace": "workspace-id-123"
+		}]`
+		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
+		return resp, nil
+	}
+
 	// Default: return a 404 Not Found
 	resp.StatusCode = http.StatusNotFound
 	resp.Body = io.NopCloser(strings.NewReader(`{"error": "Not found"}`))
@@ -431,4 +467,140 @@ func TestVariableResource_Metadata(t *testing.T) {
 
 	// Verify the type name
 	assert.Equal(t, "infradots_variable", resp.TypeName)
+}
+
+func TestVariableResource_ImportState_OrganizationVariable(t *testing.T) {
+	r := setupTestVariableResource(t)
+
+	ctx := context.Background()
+
+	// Test successful import of organization-level variable
+	request := resource.ImportStateRequest{
+		ID: "test-org:test-variable",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Check for errors
+	require.False(t, response.Diagnostics.HasError())
+
+	// Parse the response state
+	var state VariableResourceModel
+	diags := response.State.Get(ctx, &state)
+	require.Empty(t, diags)
+
+	// Verify the imported values
+	assert.Equal(t, "4f450f4d-9af2-5432-cdef-f0045678901b", state.ID.ValueString())
+	assert.Equal(t, "test-org", state.OrganizationName.ValueString())
+	assert.Equal(t, "test-variable", state.Key.ValueString())
+	assert.Equal(t, "test-value", state.Value.ValueString())
+	assert.Equal(t, "terraform", state.Category.ValueString())
+	assert.False(t, state.Sensitive.ValueBool())
+	assert.False(t, state.HCL.ValueBool())
+	assert.True(t, state.Workspace.IsNull())
+}
+
+func TestVariableResource_ImportState_WorkspaceVariable(t *testing.T) {
+	r := setupTestVariableResource(t)
+
+	ctx := context.Background()
+
+	// Test successful import of workspace-level variable
+	request := resource.ImportStateRequest{
+		ID: "test-org:test-workspace:workspace-variable",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Check for errors
+	require.False(t, response.Diagnostics.HasError())
+
+	// Parse the response state
+	var state VariableResourceModel
+	diags := response.State.Get(ctx, &state)
+	require.Empty(t, diags)
+
+	// Verify the imported values
+	assert.Equal(t, "5f550f5e-0bf3-6543-defg-g1156789012c", state.ID.ValueString())
+	assert.Equal(t, "test-org", state.OrganizationName.ValueString())
+	assert.Equal(t, "workspace-variable", state.Key.ValueString())
+	assert.Equal(t, "workspace-value", state.Value.ValueString())
+	assert.Equal(t, "env", state.Category.ValueString())
+	assert.True(t, state.Sensitive.ValueBool())
+	assert.False(t, state.HCL.ValueBool())
+	assert.Equal(t, "workspace-id-123", state.Workspace.ValueString())
+}
+
+func TestVariableResource_ImportState_InvalidFormat(t *testing.T) {
+	r := setupTestVariableResource(t)
+
+	ctx := context.Background()
+
+	// Test invalid import format (only 1 part)
+	request := resource.ImportStateRequest{
+		ID: "invalid-format",
+	}
+	response := resource.ImportStateResponse{}
+
+	r.ImportState(ctx, request, &response)
+
+	// Should have errors
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Invalid import ID format")
+
+	// Test invalid import format (4 parts)
+	request.ID = "org:workspace:key:extra"
+	response = resource.ImportStateResponse{}
+	r.ImportState(ctx, request, &response)
+
+	// Should have errors
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Invalid import ID format")
+}
+
+func TestVariableResource_ImportState_NotFound(t *testing.T) {
+	r := setupTestVariableResource(t)
+
+	ctx := context.Background()
+
+	// Test variable not found (organization level)
+	request := resource.ImportStateRequest{
+		ID: "test-org:nonexistent-variable",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Should have errors
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Variable not found")
 }

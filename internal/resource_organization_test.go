@@ -65,6 +65,24 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 		return resp, nil
 	}
 
+	// Handle Import - Get by name (GET to /api/organizations/{name}/)
+	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org") && !strings.Contains(url, "/api/organizations/2e240d2c") && !strings.HasSuffix(url, "/api/organizations/") {
+		jsonResp := `{
+			"id": "2e240d2c-78e0-4832-abdc-daa33477a238",
+			"name": "test-org",
+			"members": [{"email": "test@infradots.com"}],
+			"created_at": "2025-07-07T12:00:00Z",
+			"updated_at": "2025-07-07T12:00:00Z",
+			"subscription": {},
+			"tags": {},
+			"teams": [{"name": "devops"}],
+			"execution_mode": "remote",
+			"agents_enabled": true
+		}`
+		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
+		return resp, nil
+	}
+
 	// Handle List (GET to /api/organizations/)
 	if req.Method == http.MethodGet && strings.HasSuffix(url, "/api/organizations/") {
 		jsonResp := `[{
@@ -367,6 +385,70 @@ func TestOrganizationResource_Schema(t *testing.T) {
 	agentsEnabledAttr := attrs["agents_enabled"].(schema.BoolAttribute)
 	assert.True(t, agentsEnabledAttr.Computed)
 	assert.True(t, agentsEnabledAttr.Optional)
+}
+
+func TestOrganizationResource_ImportState(t *testing.T) {
+	r := setupTestResource(t)
+
+	ctx := context.Background()
+
+	// Test successful import
+	request := resource.ImportStateRequest{
+		ID: "test-org",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Check for errors
+	require.False(t, response.Diagnostics.HasError())
+
+	// Parse the response state
+	var state OrganizationResourceModel
+	diags := response.State.Get(ctx, &state)
+	require.Empty(t, diags)
+
+	// Verify the imported values
+	assert.Equal(t, "2e240d2c-78e0-4832-abdc-daa33477a238", state.ID.ValueString())
+	assert.Equal(t, "test-org", state.Name.ValueString())
+	assert.Equal(t, "remote", state.ExecutionMode.ValueString())
+	assert.True(t, state.AgentsEnabled.ValueBool())
+}
+
+func TestOrganizationResource_ImportState_NotFound(t *testing.T) {
+	r := setupTestResource(t)
+
+	ctx := context.Background()
+
+	// Test organization not found
+	request := resource.ImportStateRequest{
+		ID: "nonexistent-org",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Should have errors
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Organization not found")
 }
 
 func TestOrganizationResource_Metadata(t *testing.T) {

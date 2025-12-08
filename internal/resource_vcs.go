@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	tflog "github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Ensure we fully satisfy the resource.Resource interface.
@@ -42,8 +43,8 @@ type VCSResourceModel struct {
 type VCSAPIResponse struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
-	VcsType     string    `json:"vcs_type"`
-	URL         string    `json:"url"`
+	VcsType     string    `json:"vcsType"`
+	URL         string    `json:"endpoint"`
 	ClientId    string    `json:"clientId"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -53,8 +54,8 @@ type VCSAPIResponse struct {
 // VCSCreateRequest represents the JSON structure for creating a VCS
 type VCSCreateRequest struct {
 	Name         string `json:"name"`
-	VcsType      string `json:"vcs_type"`
-	URL          string `json:"url"`
+	VcsType      string `json:"vcsType"`
+	URL          string `json:"endpoint"`
 	ClientId     string `json:"clientId"`
 	ClientSecret string `json:"clientSecret"`
 	Description  string `json:"description,omitempty"`
@@ -63,8 +64,8 @@ type VCSCreateRequest struct {
 // VCSUpdateRequest represents the JSON structure for updating a VCS
 type VCSUpdateRequest struct {
 	Name         string `json:"name,omitempty"`
-	VcsType      string `json:"vcs_type,omitempty"`
-	URL          string `json:"url,omitempty"`
+	VcsType      string `json:"vcsType,omitempty"`
+	URL          string `json:"endpoint,omitempty"`
 	ClientId     string `json:"clientId,omitempty"`
 	ClientSecret string `json:"clientSecret,omitempty"`
 	Description  string `json:"description,omitempty"`
@@ -148,7 +149,6 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	// Prepare the request
 	createReq := VCSCreateRequest{
 		Name:         data.Name.ValueString(),
 		VcsType:      data.VcsType.ValueString(),
@@ -164,16 +164,19 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	// POST to /api/organizations/{organization_name}/vcs/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/vcs/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/vcs/",
 		r.provider.host,
 		data.OrganizationName.ValueString())
-
+	tflog.Debug(ctx, url)
 	reqHttp, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(reqBody)))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating request", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "HTTP request", map[string]any{
+		"method": reqHttp.Method,
+		"url":    reqHttp.URL.String(), // or req.URL.Redacted()
+	})
 	reqHttp.Header.Set("Authorization", "Bearer "+r.provider.token)
 	reqHttp.Header.Set("Content-Type", "application/json")
 
@@ -184,7 +187,6 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 	defer httpResp.Body.Close()
 
-	// Read the response body
 	respBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading response body", err.Error())
@@ -199,7 +201,6 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	// Parse the response
 	var vcs VCSAPIResponse
 	err = json.Unmarshal(respBody, &vcs)
 	if err != nil {
@@ -217,7 +218,6 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 	data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
 
-	// Save data back into Terraform state
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
@@ -230,8 +230,7 @@ func (r *VCSResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	// GET from /api/organizations/{organization_name}/vcs/{vcs_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/vcs/%s/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/vcs/%s/",
 		r.provider.host,
 		data.OrganizationName.ValueString(),
 		data.ID.ValueString())
@@ -339,7 +338,7 @@ func (r *VCSResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 
 	// PATCH to /api/organizations/{organization_name}/vcs/{vcs_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/vcs/%s/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/vcs/%s/",
 		r.provider.host,
 		plan.OrganizationName.ValueString(),
 		plan.ID.ValueString())
@@ -407,7 +406,7 @@ func (r *VCSResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	}
 
 	// DELETE from /api/organizations/{organization_name}/vcs/{vcs_id}/
-	url := fmt.Sprintf("http://%s/api/organizations/%s/vcs/%s/",
+	url := fmt.Sprintf("https://%s/api/organizations/%s/vcs/%s/",
 		r.provider.host,
 		data.OrganizationName.ValueString(),
 		data.ID.ValueString())
@@ -443,4 +442,97 @@ func (r *VCSResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 
 	// Remove resource from state
 	resp.State.RemoveResource(ctx)
+}
+
+func (r *VCSResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID: format is "organization_name:vcs_name"
+	parts := strings.Split(req.ID, ":")
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid import ID format",
+			"Import ID must be in the format 'organization_name:vcs_name'",
+		)
+		return
+	}
+
+	organizationName := parts[0]
+	vcsName := parts[1]
+
+	// Use the list endpoint and filter by name (same approach as datasource)
+	url := fmt.Sprintf("https://%s/api/organizations/%s/vcs/",
+		r.provider.host,
+		organizationName)
+
+	reqHttp, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating request", err.Error())
+		return
+	}
+	reqHttp.Header.Set("Authorization", "Bearer "+r.provider.token)
+
+	httpResp, err := r.provider.client.Do(reqHttp)
+	if err != nil {
+		resp.Diagnostics.AddError("HTTP request failed", err.Error())
+		return
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError(
+			"Failed to fetch VCS connections",
+			fmt.Sprintf("Status code: %d, Body: %s", httpResp.StatusCode, string(respBody)),
+		)
+		return
+	}
+
+	// Read and parse the response body (list of VCS connections)
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading response body", err.Error())
+		return
+	}
+
+	var vcsList []VCSAPIResponse
+	err = json.Unmarshal(respBody, &vcsList)
+	if err != nil {
+		resp.Diagnostics.AddError("Error parsing response", err.Error())
+		return
+	}
+
+	// Find the VCS by name
+	var vcs *VCSAPIResponse
+	found := false
+	for i := range vcsList {
+		if vcsList[i].Name == vcsName {
+			vcs = &vcsList[i]
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		resp.Diagnostics.AddError(
+			"VCS connection not found",
+			fmt.Sprintf("No VCS connection with name '%s' found in organization '%s'", vcsName, organizationName),
+		)
+		return
+	}
+
+	// Create the state model with the fetched data
+	var data VCSResourceModel
+	data.ID = types.StringValue(vcs.ID)
+	data.OrganizationName = types.StringValue(organizationName)
+	data.Name = types.StringValue(vcs.Name)
+	data.VcsType = types.StringValue(vcs.VcsType)
+	data.URL = types.StringValue(vcs.URL)
+	data.ClientId = types.StringValue(vcs.ClientId)
+	// clientSecret is write-only, not returned by API - will need to be set manually
+	data.Description = types.StringValue(vcs.Description)
+	data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
+	data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
+
+	// Set the state
+	diags := resp.State.Set(ctx, &data)
+	resp.Diagnostics.Append(diags...)
 }

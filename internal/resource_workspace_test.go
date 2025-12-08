@@ -120,6 +120,32 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 		return resp, nil
 	}
 
+	// Handle Import - List workspaces (GET to /api/organizations/{org_name}/workspaces/)
+	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/workspaces/") && !strings.Contains(url, "/workspaces/3f340e3c") {
+		jsonResp := `[{
+			"id": "3f340e3c-89f1-4321-bcde-eff34567890a",
+			"name": "test-workspace",
+			"description": "Test workspace for Terraform",
+			"source": "https://github.com/test/repo",
+			"branch": "main",
+			"terraform_version": "1.5.0",
+			"created_at": "2025-07-07T12:00:00Z",
+			"updated_at": "2025-07-07T12:00:00Z",
+			"vcs": {
+				"id": "vcs-12345",
+				"name": "github-connection",
+				"vcsType": "github",
+				"endpoint": "https://github.com",
+				"clientId": "test-client-id",
+				"description": "GitHub VCS connection",
+				"created_at": "2025-07-01T12:00:00Z",
+				"updated_at": "2025-07-01T12:00:00Z"
+			}
+		}]`
+		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
+		return resp, nil
+	}
+
 	// Default: return a 404 Not Found
 	resp.StatusCode = http.StatusNotFound
 	resp.Body = io.NopCloser(strings.NewReader(`{"error": "Not found"}`))
@@ -509,4 +535,89 @@ func TestWorkspaceResource_Metadata(t *testing.T) {
 
 	// Verify the type name
 	assert.Equal(t, "infradots_workspace", resp.TypeName)
+}
+
+func TestWorkspaceResource_ImportState(t *testing.T) {
+	r := setupTestWorkspaceResource(t)
+
+	ctx := context.Background()
+
+	// Test successful import
+	request := resource.ImportStateRequest{
+		ID: "test-org:test-workspace",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Check for errors
+	require.False(t, response.Diagnostics.HasError())
+
+	// Parse the response state
+	var state WorkspaceResourceModel
+	diags := response.State.Get(ctx, &state)
+	require.Empty(t, diags)
+
+	// Verify the imported values
+	assert.Equal(t, "3f340e3c-89f1-4321-bcde-eff34567890a", state.ID.ValueString())
+	assert.Equal(t, "test-org", state.OrganizationName.ValueString())
+	assert.Equal(t, "test-workspace", state.Name.ValueString())
+	assert.Equal(t, "Test workspace for Terraform", state.Description.ValueString())
+	assert.Equal(t, "https://github.com/test/repo", state.Source.ValueString())
+	assert.Equal(t, "main", state.Branch.ValueString())
+	assert.Equal(t, "1.5.0", state.TerraformVersion.ValueString())
+}
+
+func TestWorkspaceResource_ImportState_InvalidFormat(t *testing.T) {
+	r := setupTestWorkspaceResource(t)
+
+	ctx := context.Background()
+
+	// Test invalid import format
+	request := resource.ImportStateRequest{
+		ID: "invalid-format",
+	}
+	response := resource.ImportStateResponse{}
+
+	r.ImportState(ctx, request, &response)
+
+	// Should have errors
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Invalid import ID format")
+}
+
+func TestWorkspaceResource_ImportState_NotFound(t *testing.T) {
+	r := setupTestWorkspaceResource(t)
+
+	ctx := context.Background()
+
+	// Test workspace not found
+	request := resource.ImportStateRequest{
+		ID: "test-org:nonexistent-workspace",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Should have errors
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Workspace not found")
 }

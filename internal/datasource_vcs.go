@@ -150,14 +150,14 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 			)
 			return
 		}
-		url = fmt.Sprintf("http://%s/api/organizations/%s/vcs/%s/",
+		url = fmt.Sprintf("https://%s/api/organizations/%s/vcs/%s/",
 			d.provider.host,
 			filter.OrganizationName.ValueString(),
 			filter.ID.ValueString())
 	} else {
 		// Fetch by organization name and VCS name
 		// First get all VCS connections for the organization, then filter by name
-		url = fmt.Sprintf("http://%s/api/organizations/%s/vcs/",
+		url = fmt.Sprintf("https://%s/api/organizations/%s/vcs/",
 			d.provider.host,
 			filter.OrganizationName.ValueString())
 	}

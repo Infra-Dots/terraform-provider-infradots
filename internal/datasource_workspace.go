@@ -213,13 +213,13 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 			)
 			return
 		}
-		url = fmt.Sprintf("http://%s/api/organizations/%s/workspaces/%s/",
+		url = fmt.Sprintf("https://%s/api/organizations/%s/workspaces/%s/",
 			d.provider.host,
 			filter.OrganizationName.ValueString(),
 			filter.ID.ValueString())
 	} else {
 		// Fetch by organization name and workspace name
-		url = fmt.Sprintf("http://%s/api/organizations/%s/workspaces/",
+		url = fmt.Sprintf("https://%s/api/organizations/%s/workspaces/",
 			d.provider.host,
 			filter.OrganizationName.ValueString())
 	}

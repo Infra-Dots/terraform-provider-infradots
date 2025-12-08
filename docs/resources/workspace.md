@@ -45,7 +45,7 @@ In addition to all arguments above, the following attributes are exported:
 
 ## Import
 
-Workspaces can be imported using the `organization_name` and `id` separated by a colon, e.g.,
+Workspaces can be imported using the `organization_name` and `workspace_name` separated by a colon, e.g.,
 
 ```
-$ terraform import infradots_workspace.example infradots:2e240d2c-78e0-4832-abdc-daa33477a238
+$ terraform import infradots_workspace.example infradots:example-workspace

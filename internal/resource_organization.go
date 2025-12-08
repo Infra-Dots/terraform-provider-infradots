@@ -140,7 +140,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	url := fmt.Sprintf("http://%s/api/organizations/", r.provider.host)
+	url := fmt.Sprintf("https://%s/api/organizations/", r.provider.host)
 
 	reqHttp, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(reqBody)))
 	if err != nil {
@@ -197,7 +197,7 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	url := fmt.Sprintf("http://%s/api/organizations/%s/", r.provider.host, data.ID.ValueString())
+	url := fmt.Sprintf("https://%s/api/organizations/%s/", r.provider.host, data.ID.ValueString())
 
 	reqHttp, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -282,7 +282,7 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	url := fmt.Sprintf("http://%s/api/organizations/%s/", r.provider.host, plan.ID.ValueString())
+	url := fmt.Sprintf("https://%s/api/organizations/%s/", r.provider.host, plan.ID.ValueString())
 
 	reqHttp, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(string(reqBody)))
 	if err != nil {
@@ -339,7 +339,7 @@ func (r *OrganizationResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
-	url := fmt.Sprintf("http://%s/api/organizations/%s/", r.provider.host, data.ID.ValueString())
+	url := fmt.Sprintf("https://%s/api/organizations/%s/", r.provider.host, data.ID.ValueString())
 
 	reqHttp, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
@@ -370,4 +370,66 @@ func (r *OrganizationResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	resp.State.RemoveResource(ctx)
+}
+
+func (r *OrganizationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	organizationName := req.ID
+
+	url := fmt.Sprintf("https://%s/api/organizations/%s/", r.provider.host, organizationName)
+
+	reqHttp, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating request", err.Error())
+		return
+	}
+	reqHttp.Header.Set("Authorization", "Bearer "+r.provider.token)
+
+	httpResp, err := r.provider.client.Do(reqHttp)
+	if err != nil {
+		resp.Diagnostics.AddError("HTTP request failed", err.Error())
+		return
+	}
+	defer httpResp.Body.Close()
+
+	// If 404, organization not found
+	if httpResp.StatusCode == 404 {
+		resp.Diagnostics.AddError(
+			"Organization not found",
+			fmt.Sprintf("Organization '%s' not found", organizationName),
+		)
+		return
+	}
+
+	if httpResp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError(
+			"Failed to fetch organization",
+			fmt.Sprintf("Status code: %d, Body: %s", httpResp.StatusCode, string(respBody)),
+		)
+		return
+	}
+
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading response body", err.Error())
+		return
+	}
+
+	var organization OrganizationAPIResponse
+	err = json.Unmarshal(respBody, &organization)
+	if err != nil {
+		resp.Diagnostics.AddError("Error parsing response", err.Error())
+		return
+	}
+
+	var data OrganizationResourceModel
+	data.ID = types.StringValue(organization.ID)
+	data.Name = types.StringValue(organization.Name)
+	data.CreatedAt = types.StringValue(organization.CreatedAt.Format(time.RFC3339))
+	data.UpdatedAt = types.StringValue(organization.UpdatedAt.Format(time.RFC3339))
+	data.ExecutionMode = types.StringValue(strings.ToLower(organization.ExecutionMode))
+	data.AgentsEnabled = types.BoolValue(organization.AgentsEnabled)
+
+	diags := resp.State.Set(ctx, &data)
+	resp.Diagnostics.Append(diags...)
 }

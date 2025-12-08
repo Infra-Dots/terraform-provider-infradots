@@ -161,10 +161,10 @@ func (d *OrganizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	var url string
 	if !filter.ID.IsNull() {
 		// Fetch by ID
-		url = fmt.Sprintf("http://%s/api/organizations/%s/", d.provider.host, filter.ID.ValueString())
+		url = fmt.Sprintf("https://%s/api/organizations/%s/", d.provider.host, filter.ID.ValueString())
 	} else {
 		// Fetch by name (first get all, then filter)
-		url = fmt.Sprintf("http://%s/api/organizations/", d.provider.host)
+		url = fmt.Sprintf("https://%s/api/organizations/", d.provider.host)
 	}
 
 	// Create HTTP request

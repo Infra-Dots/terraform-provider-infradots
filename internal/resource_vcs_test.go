@@ -86,6 +86,22 @@ func (m *MockVCSRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		return resp, nil
 	}
 
+	// Handle Import - List VCS connections (GET to /api/organizations/{org_name}/vcs/)
+	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/vcs/") && !strings.Contains(url, "/vcs/5f560f5e") {
+		jsonResp := `[{
+			"id": "5f560f5e-0bf3-6543-defg-g1156789012c",
+			"name": "test-vcs",
+			"vcsType": "github",
+			"endpoint": "https://github.com",
+			"clientId": "test-client-id",
+			"description": "Test VCS connection for GitHub",
+			"created_at": "2025-07-07T12:00:00Z",
+			"updated_at": "2025-07-07T12:00:00Z"
+		}]`
+		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
+		return resp, nil
+	}
+
 	// Default: return a 404 Not Found
 	resp.StatusCode = http.StatusNotFound
 	resp.Body = io.NopCloser(strings.NewReader(`{"error": "Not found"}`))
@@ -422,4 +438,88 @@ func TestVCSResource_Metadata(t *testing.T) {
 
 	// Verify the type name
 	assert.Equal(t, "infradots_vcs", resp.TypeName)
+}
+
+func TestVCSResource_ImportState(t *testing.T) {
+	r := setupTestVCSResource(t)
+
+	ctx := context.Background()
+
+	// Test successful import
+	request := resource.ImportStateRequest{
+		ID: "test-org:test-vcs",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Check for errors
+	require.False(t, response.Diagnostics.HasError())
+
+	// Parse the response state
+	var state VCSResourceModel
+	diags := response.State.Get(ctx, &state)
+	require.Empty(t, diags)
+
+	// Verify the imported values
+	assert.Equal(t, "5f560f5e-0bf3-6543-defg-g1156789012c", state.ID.ValueString())
+	assert.Equal(t, "test-org", state.OrganizationName.ValueString())
+	assert.Equal(t, "test-vcs", state.Name.ValueString())
+	assert.Equal(t, "github", state.VcsType.ValueString())
+	assert.Equal(t, "https://github.com", state.URL.ValueString())
+	assert.Equal(t, "test-client-id", state.ClientId.ValueString())
+}
+
+func TestVCSResource_ImportState_InvalidFormat(t *testing.T) {
+	r := setupTestVCSResource(t)
+
+	ctx := context.Background()
+
+	// Test invalid import format
+	request := resource.ImportStateRequest{
+		ID: "invalid-format",
+	}
+	response := resource.ImportStateResponse{}
+
+	r.ImportState(ctx, request, &response)
+
+	// Should have errors
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Invalid import ID format")
+}
+
+func TestVCSResource_ImportState_NotFound(t *testing.T) {
+	r := setupTestVCSResource(t)
+
+	ctx := context.Background()
+
+	// Test VCS not found
+	request := resource.ImportStateRequest{
+		ID: "test-org:nonexistent-vcs",
+	}
+	response := resource.ImportStateResponse{
+		State: tfsdk.State{},
+	}
+
+	// Get schema for state
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	response.State = tfsdk.State{
+		Schema: schemaResp.Schema,
+	}
+
+	r.ImportState(ctx, request, &response)
+
+	// Should have errors
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "VCS connection not found")
 }
