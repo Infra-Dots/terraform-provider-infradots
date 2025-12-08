@@ -116,6 +116,7 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"vcs_id": schema.StringAttribute{
 				Description: "ID of a VCS Provider in infradots to connect to the workspace",
 				Required:    false,
+				Optional:    true,
 			},
 			"vcs": schema.SingleNestedAttribute{
 				Description: "VCS connection details associated with this workspace.",

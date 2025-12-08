@@ -21,8 +21,8 @@ resource "infradots_vcs" "github" {
   name              = "github-connection"
   vcs_type          = "github"
   url               = "https://github.com"
-  clientId          = "your_github_oauth_client_id"
-  clientSecret      = "your_github_oauth_client_secret"
+  client_id         = "your_github_oauth_client_id"
+  client_secret      = "your_github_oauth_client_secret"
   description       = "GitHub VCS connection for our organization"
 }
 
@@ -31,8 +31,8 @@ resource "infradots_vcs" "gitlab" {
   name              = "gitlab-connection"
   vcs_type          = "gitlab"
   url               = "https://gitlab.com"
-  clientId          = "your_gitlab_oauth_client_id"
-  clientSecret      = "your_gitlab_oauth_client_secret"
+  client_id         = "your_gitlab_oauth_client_id"
+  client_secret     = "your_gitlab_oauth_client_secret"
   description       = "GitLab VCS connection for our organization"
 }
 

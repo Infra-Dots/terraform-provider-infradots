@@ -33,7 +33,7 @@ type VCSDataSourceModel struct {
 	Name             types.String `tfsdk:"name"`
 	VcsType          types.String `tfsdk:"vcs_type"`
 	URL              types.String `tfsdk:"url"`
-	ClientId         types.String `tfsdk:"clientId"`
+	ClientId         types.String `tfsdk:"client_id"`
 	Description      types.String `tfsdk:"description"`
 	CreatedAt        types.String `tfsdk:"created_at"`
 	UpdatedAt        types.String `tfsdk:"updated_at"`
@@ -79,7 +79,7 @@ func (d *VCSDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 				Description: "The URL of the VCS instance.",
 				Computed:    true,
 			},
-			"clientId": schema.StringAttribute{
+			"client_id": schema.StringAttribute{
 				Description: "The client ID for the VCS.",
 				Computed:    true,
 			},

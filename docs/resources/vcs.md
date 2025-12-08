@@ -10,8 +10,8 @@ resource "infradots_vcs" "example" {
   name              = "github-connection"
   vcs_type          = "github"
   url               = "https://github.com"
-  clientId          = "your_oauth_client_id"
-  clientSecret      = "your_oauth_client_secret"
+  client_id          = "your_oauth_client_id"
+  client_secret      = "your_oauth_client_secret"
   description       = "GitHub VCS connection for our organization"
 }
 ```
@@ -24,8 +24,8 @@ The following arguments are supported:
 * `name` - (Required) The name of the VCS connection.
 * `vcs_type` - (Required) The type of VCS (e.g., "github", "gitlab", "bitbucket").
 * `url` - (Required) The URL of the VCS instance.
-* `clientId` - (Required) The OAuth client ID for the VCS.
-* `clientSecret` - (Required, Sensitive) The OAuth client secret for the VCS.
+* `client_id` - (Required) The OAuth client ID for the VCS.
+* `client_secret` - (Required, Sensitive) The OAuth client secret for the VCS.
 * `description` - (Optional) A description of the VCS connection. Defaults to an empty string.
 
 ## Attributes Reference

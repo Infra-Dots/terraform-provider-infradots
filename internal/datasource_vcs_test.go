@@ -114,7 +114,7 @@ func TestVCSDataSource_Schema(t *testing.T) {
 	assert.Contains(t, attrs, "name")
 	assert.Contains(t, attrs, "vcs_type")
 	assert.Contains(t, attrs, "url")
-	assert.Contains(t, attrs, "clientId")
+	assert.Contains(t, attrs, "client_id")
 	assert.Contains(t, attrs, "description")
 	assert.Contains(t, attrs, "created_at")
 	assert.Contains(t, attrs, "updated_at")
@@ -138,7 +138,7 @@ func TestVCSDataSource_Schema(t *testing.T) {
 	urlAttr := attrs["url"].(schema.StringAttribute)
 	assert.True(t, urlAttr.Computed)
 
-	clientIdAttr := attrs["clientId"].(schema.StringAttribute)
+	clientIdAttr := attrs["client_id"].(schema.StringAttribute)
 	assert.True(t, clientIdAttr.Computed)
 
 	descAttr := attrs["description"].(schema.StringAttribute)
