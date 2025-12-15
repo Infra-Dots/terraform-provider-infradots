@@ -35,8 +35,8 @@ func (m *MockVCSRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		jsonResp := `{
 			"id": "5f560f5e-0bf3-6543-defg-g1156789012c",
 			"name": "test-vcs",
-			"vcs_type": "github",
-			"url": "https://github.com",
+			"vcsType": "github",
+			"endpoint": "https://github.com",
 			"clientId": "test-client-id",
 			"description": "Test VCS connection for GitHub",
 			"created_at": "2025-07-07T12:00:00Z",
@@ -52,8 +52,8 @@ func (m *MockVCSRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		jsonResp := `{
 			"id": "5f560f5e-0bf3-6543-defg-g1156789012c",
 			"name": "test-vcs",
-			"vcs_type": "github",
-			"url": "https://github.com",
+			"vcsType": "github",
+			"endpoint": "https://github.com",
 			"clientId": "test-client-id",
 			"description": "Test VCS connection for GitHub",
 			"created_at": "2025-07-07T12:00:00Z",
@@ -68,8 +68,8 @@ func (m *MockVCSRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		jsonResp := `{
 			"id": "5f560f5e-0bf3-6543-defg-g1156789012c",
 			"name": "updated-vcs",
-			"vcs_type": "gitlab",
-			"url": "https://gitlab.com",
+			"vcsType": "gitlab",
+			"endpoint": "https://gitlab.com",
 			"clientId": "updated-client-id",
 			"description": "Updated VCS connection for GitLab",
 			"created_at": "2025-07-07T12:00:00Z",

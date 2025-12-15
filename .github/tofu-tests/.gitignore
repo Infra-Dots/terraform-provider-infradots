@@ -1,0 +1,13 @@
+# Terraform/OpenTofu files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
+
+# Provider binaries
+terraform-provider-infradots
+

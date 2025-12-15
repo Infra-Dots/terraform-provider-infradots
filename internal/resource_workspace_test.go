@@ -45,10 +45,9 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"vcs": {
 				"id": "vcs-12345",
 				"name": "github-connection",
-				"vcs_type": "github",
-				"url": "https://github.com",
+				"vcsType": "github",
+				"endpoint": "https://github.com",
 				"clientId": "test-client-id",
-				"clientSecret": "test-client-secret",
 				"description": "GitHub VCS connection",
 				"created_at": "2025-07-01T12:00:00Z",
 				"updated_at": "2025-07-01T12:00:00Z"
@@ -59,8 +58,8 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 		return resp, nil
 	}
 
-	// Handle Read (GET to /api/organizations/{org_name}/workspaces/{id})
-	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/workspaces/3f340e3c-89f1-4321-bcde-eff34567890a") {
+	// Handle Read (GET to /api/organizations/{org_name}/workspaces/{workspace_name})
+	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/workspaces/test-workspace") {
 		jsonResp := `{
 			"id": "3f340e3c-89f1-4321-bcde-eff34567890a",
 			"name": "test-workspace",
@@ -73,10 +72,9 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"vcs": {
 				"id": "vcs-12345",
 				"name": "github-connection",
-				"vcs_type": "github",
-				"url": "https://github.com",
+				"vcsType": "github",
+				"endpoint": "https://github.com",
 				"clientId": "test-client-id",
-				"clientSecret": "test-client-secret",
 				"description": "GitHub VCS connection",
 				"created_at": "2025-07-01T12:00:00Z",
 				"updated_at": "2025-07-01T12:00:00Z"
@@ -86,8 +84,8 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 		return resp, nil
 	}
 
-	// Handle Update (PATCH to /api/organizations/{org_name}/workspaces/{id})
-	if req.Method == http.MethodPatch && strings.Contains(url, "/api/organizations/test-org/workspaces/3f340e3c-89f1-4321-bcde-eff34567890a") {
+	// Handle Update (PATCH to /api/organizations/{org_name}/workspaces/{workspace_name})
+	if req.Method == http.MethodPatch && strings.Contains(url, "/api/organizations/test-org/workspaces/test-workspace") {
 		jsonResp := `{
 			"id": "3f340e3c-89f1-4321-bcde-eff34567890a",
 			"name": "updated-workspace",
@@ -100,10 +98,9 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"vcs": {
 				"id": "vcs-12345",
 				"name": "github-connection",
-				"vcs_type": "github",
-				"url": "https://github.com",
+				"vcsType": "github",
+				"endpoint": "https://github.com",
 				"clientId": "test-client-id",
-				"clientSecret": "test-client-secret",
 				"description": "GitHub VCS connection",
 				"created_at": "2025-07-01T12:00:00Z",
 				"updated_at": "2025-07-01T12:00:00Z"
@@ -113,15 +110,17 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 		return resp, nil
 	}
 
-	// Handle Delete (DELETE to /api/organizations/{org_name}/workspaces/{id})
-	if req.Method == http.MethodDelete && strings.Contains(url, "/api/organizations/test-org/workspaces/3f340e3c-89f1-4321-bcde-eff34567890a") {
+	// Handle Delete (DELETE to /api/organizations/{org_name}/workspaces/{workspace_name})
+	if req.Method == http.MethodDelete && strings.Contains(url, "/api/organizations/test-org/workspaces/test-workspace") {
 		resp.StatusCode = http.StatusNoContent
 		resp.Body = io.NopCloser(strings.NewReader(""))
 		return resp, nil
 	}
 
 	// Handle Import - List workspaces (GET to /api/organizations/{org_name}/workspaces/)
-	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/workspaces/") && !strings.Contains(url, "/workspaces/3f340e3c") {
+	// This must come after the Read handler to avoid matching single workspace requests
+	// Only match if it's exactly the list endpoint (ends with /workspaces/)
+	if req.Method == http.MethodGet && strings.HasSuffix(url, "/api/organizations/test-org/workspaces/") {
 		jsonResp := `[{
 			"id": "3f340e3c-89f1-4321-bcde-eff34567890a",
 			"name": "test-workspace",
