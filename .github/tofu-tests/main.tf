@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     infradots = {
-      source  = "local/infra-dots/infradots"
+      source  = "infra-dots/infradots"
       version = ">= 1.0.0"
     }
   }
