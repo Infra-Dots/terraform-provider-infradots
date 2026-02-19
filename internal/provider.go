@@ -104,6 +104,11 @@ func (p *InfradotsProvider) Resources(_ context.Context) []func() resource.Resou
 		NewWorkspaceResource,
 		NewVariableResource,
 		NewVCSResource,
+		NewUserResource,
+		NewTeamResource,
+		NewPermissionResource,
+		NewWorkerPoolResource,
+		NewWorkspaceInterconnectionResource,
 	}
 }
 
@@ -113,5 +118,7 @@ func (p *InfradotsProvider) DataSources(_ context.Context) []func() datasource.D
 		NewOrganizationDataSource,
 		NewWorkspaceDataSource,
 		NewVCSDataSource,
+		NewTeamDataSource,
+		NewWorkerPoolDataSource,
 	}
 }

@@ -9,9 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -34,6 +38,15 @@ type WorkspaceResourceModel struct {
 	UpdatedAt        types.String `tfsdk:"updated_at"` // timestamp
 	VcsId            types.String `tfsdk:"vcs_id"`     // UUID of a VCS provider in IDP
 	VCS              types.Object `tfsdk:"vcs"`        // VCS object as returned by API
+	Locked           types.Bool   `tfsdk:"locked"`
+	AutoApply        types.Bool   `tfsdk:"auto_apply"`
+	IacType          types.String `tfsdk:"iac_type"`
+	DefaultJobAction types.String `tfsdk:"default_job_action"`
+	WorkerPoolID     types.String `tfsdk:"worker_pool_id"`
+	Folder           types.String `tfsdk:"folder"`
+	ExecutionMode    types.String `tfsdk:"execution_mode"`
+	Tags             types.Map    `tfsdk:"tags"`
+	AgentsEnabled    types.Bool   `tfsdk:"agents_enabled"`
 }
 
 type WorkspaceAPIResponse struct {
@@ -45,25 +58,48 @@ type WorkspaceAPIResponse struct {
 	TerraformVersion string          `json:"terraform_version"`
 	CreatedAt        time.Time       `json:"created_at"`
 	UpdatedAt        time.Time       `json:"updated_at"`
-	VCS              *VCSAPIResponse `json:"vcs"` // VCS object from API
+	VCS              *VCSAPIResponse `json:"vcs"`
+	Locked           bool            `json:"locked"`
+	AutoApply        bool            `json:"auto_apply"`
+	IacType          string          `json:"iac_type"`
+	DefaultJobAction string          `json:"default_job_action"`
+	WorkerPool       *string         `json:"worker_pool"`
+	Folder           string          `json:"folder"`
+	ExecutionMode    string          `json:"execution_mode"`
+	Tags             map[string]any  `json:"tags"`
+	AgentsEnabled    bool            `json:"agents_enabled"`
 }
 
-// WorkspaceCreateRequest represents the JSON structure for creating a workspace
 type WorkspaceCreateRequest struct {
-	Name             string `json:"name"`
-	Description      string `json:"description,omitempty"`
-	Source           string `json:"source"`
-	Branch           string `json:"branch"`
-	TerraformVersion string `json:"terraform_version"`
+	Name             string         `json:"name"`
+	Description      string         `json:"description,omitempty"`
+	Source           string         `json:"source"`
+	Branch           string         `json:"branch"`
+	TerraformVersion string         `json:"terraform_version"`
+	AutoApply        bool           `json:"auto_apply"`
+	IacType          string         `json:"iac_type,omitempty"`
+	DefaultJobAction string         `json:"default_job_action,omitempty"`
+	WorkerPool       string         `json:"worker_pool,omitempty"`
+	Folder           string         `json:"folder,omitempty"`
+	ExecutionMode    string         `json:"execution_mode,omitempty"`
+	Tags             map[string]any `json:"tags,omitempty"`
+	AgentsEnabled    bool           `json:"agents_enabled"`
 }
 
-// WorkspaceUpdateRequest represents the JSON structure for updating a workspace
 type WorkspaceUpdateRequest struct {
-	Name             string `json:"name,omitempty"`
-	Description      string `json:"description,omitempty"`
-	Source           string `json:"source,omitempty"`
-	Branch           string `json:"branch,omitempty"`
-	TerraformVersion string `json:"terraform_version,omitempty"`
+	Name             string         `json:"name,omitempty"`
+	Description      string         `json:"description,omitempty"`
+	Source           string         `json:"source,omitempty"`
+	Branch           string         `json:"branch,omitempty"`
+	TerraformVersion string         `json:"terraform_version,omitempty"`
+	AutoApply        *bool          `json:"auto_apply,omitempty"`
+	IacType          string         `json:"iac_type,omitempty"`
+	DefaultJobAction string         `json:"default_job_action,omitempty"`
+	WorkerPool       string         `json:"worker_pool,omitempty"`
+	Folder           string         `json:"folder,omitempty"`
+	ExecutionMode    string         `json:"execution_mode,omitempty"`
+	Tags             map[string]any `json:"tags,omitempty"`
+	AgentsEnabled    *bool          `json:"agents_enabled,omitempty"`
 }
 
 type WorkspaceResource struct {
@@ -117,6 +153,67 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "ID of a VCS Provider in infradots to connect to the workspace",
 				Required:    false,
 				Optional:    true,
+			},
+			"locked": schema.BoolAttribute{
+				Description: "Whether the workspace is locked.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"auto_apply": schema.BoolAttribute{
+				Description: "Whether to auto-apply successful plans.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"iac_type": schema.StringAttribute{
+				Description: "The IaC type: TF (terraform), OT (opentofu), or TG (terragrunt).",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("TF"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("TF", "OT", "TG"),
+				},
+			},
+			"default_job_action": schema.StringAttribute{
+				Description: "Default job action: plan, apply, destroy, or refresh.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("plan"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("plan", "apply", "destroy", "refresh"),
+				},
+			},
+			"worker_pool_id": schema.StringAttribute{
+				Description: "ID of the worker pool to assign to this workspace.",
+				Optional:    true,
+			},
+			"folder": schema.StringAttribute{
+				Description: "The subfolder within the source repository.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("/"),
+			},
+			"execution_mode": schema.StringAttribute{
+				Description: "Execution mode for the workspace: Local or Remote.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("Remote"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("Local", "Remote"),
+				},
+			},
+			"tags": schema.MapAttribute{
+				Description: "Tags for the workspace.",
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+			},
+			"agents_enabled": schema.BoolAttribute{
+				Description: "Whether AI agents are enabled for this workspace.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
 			},
 			"vcs": schema.SingleNestedAttribute{
 				Description: "VCS connection details associated with this workspace.",
@@ -200,6 +297,45 @@ func vcsToObject(vcs *VCSAPIResponse) types.Object {
 	)
 }
 
+func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceModel, workspace WorkspaceAPIResponse) {
+	data.ID = types.StringValue(workspace.ID)
+	data.Name = types.StringValue(workspace.Name)
+	data.Description = types.StringValue(workspace.Description)
+	data.Source = types.StringValue(workspace.Source)
+	data.Branch = types.StringValue(workspace.Branch)
+	data.TerraformVersion = types.StringValue(workspace.TerraformVersion)
+	data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
+	data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
+	data.VCS = vcsToObject(workspace.VCS)
+	data.Locked = types.BoolValue(workspace.Locked)
+	data.AutoApply = types.BoolValue(workspace.AutoApply)
+	if workspace.IacType != "" {
+		data.IacType = types.StringValue(workspace.IacType)
+	}
+	if workspace.DefaultJobAction != "" {
+		data.DefaultJobAction = types.StringValue(workspace.DefaultJobAction)
+	}
+	if workspace.WorkerPool != nil {
+		data.WorkerPoolID = types.StringValue(*workspace.WorkerPool)
+	}
+	if workspace.Folder != "" {
+		data.Folder = types.StringValue(workspace.Folder)
+	}
+	if workspace.ExecutionMode != "" {
+		data.ExecutionMode = types.StringValue(workspace.ExecutionMode)
+	}
+	data.AgentsEnabled = types.BoolValue(workspace.AgentsEnabled)
+	if workspace.Tags != nil {
+		tagMap := map[string]attr.Value{}
+		for k, v := range workspace.Tags {
+			tagMap[k] = types.StringValue(fmt.Sprintf("%v", v))
+		}
+		data.Tags = types.MapValueMust(types.StringType, tagMap)
+	} else {
+		data.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	}
+}
+
 func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data WorkspaceResourceModel
 	diags := req.Plan.Get(ctx, &data)
@@ -208,13 +344,34 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	// Prepare the request
 	createReq := WorkspaceCreateRequest{
 		Name:             data.Name.ValueString(),
 		Description:      data.Description.ValueString(),
 		Source:           data.Source.ValueString(),
 		Branch:           data.Branch.ValueString(),
 		TerraformVersion: data.TerraformVersion.ValueString(),
+		AutoApply:        data.AutoApply.ValueBool(),
+		IacType:          data.IacType.ValueString(),
+		DefaultJobAction: data.DefaultJobAction.ValueString(),
+		Folder:           data.Folder.ValueString(),
+		ExecutionMode:    data.ExecutionMode.ValueString(),
+		AgentsEnabled:    data.AgentsEnabled.ValueBool(),
+	}
+	if !data.WorkerPoolID.IsNull() && data.WorkerPoolID.ValueString() != "" {
+		createReq.WorkerPool = data.WorkerPoolID.ValueString()
+	}
+	if !data.Tags.IsNull() && !data.Tags.IsUnknown() {
+		var tags map[string]string
+		diags = data.Tags.ElementsAs(ctx, &tags, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		tagsAny := map[string]any{}
+		for k, v := range tags {
+			tagsAny[k] = v
+		}
+		createReq.Tags = tagsAny
 	}
 
 	reqBody, err := json.Marshal(createReq)
@@ -266,18 +423,8 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	// Update the model with the response data
-	data.ID = types.StringValue(workspace.ID)
-	data.Name = types.StringValue(workspace.Name)
-	data.Description = types.StringValue(workspace.Description)
-	data.Source = types.StringValue(workspace.Source)
-	data.Branch = types.StringValue(workspace.Branch)
-	data.TerraformVersion = types.StringValue(workspace.TerraformVersion)
-	data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
-	data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
-	data.VCS = vcsToObject(workspace.VCS)
+	mapWorkspaceResponseToModel(ctx, &data, workspace)
 
-	// Save data back into Terraform state
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
@@ -335,18 +482,8 @@ func (r *WorkspaceResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	// Update the model with the response data
-	data.ID = types.StringValue(workspace.ID)
-	data.Name = types.StringValue(workspace.Name)
-	data.Description = types.StringValue(workspace.Description)
-	data.Source = types.StringValue(workspace.Source)
-	data.Branch = types.StringValue(workspace.Branch)
-	data.TerraformVersion = types.StringValue(workspace.TerraformVersion)
-	data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
-	data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
-	data.VCS = vcsToObject(workspace.VCS)
+	mapWorkspaceResponseToModel(ctx, &data, workspace)
 
-	// Save (possibly updated) state
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
@@ -366,27 +503,58 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	// Prepare the update request with only the fields that are changing
 	updateReq := WorkspaceUpdateRequest{}
 
 	if !plan.Name.Equal(state.Name) {
 		updateReq.Name = plan.Name.ValueString()
 	}
-
 	if !plan.Description.Equal(state.Description) {
 		updateReq.Description = plan.Description.ValueString()
 	}
-
 	if !plan.Source.Equal(state.Source) {
 		updateReq.Source = plan.Source.ValueString()
 	}
-
 	if !plan.Branch.Equal(state.Branch) {
 		updateReq.Branch = plan.Branch.ValueString()
 	}
-
 	if !plan.TerraformVersion.Equal(state.TerraformVersion) {
 		updateReq.TerraformVersion = plan.TerraformVersion.ValueString()
+	}
+	if !plan.AutoApply.Equal(state.AutoApply) {
+		v := plan.AutoApply.ValueBool()
+		updateReq.AutoApply = &v
+	}
+	if !plan.IacType.Equal(state.IacType) {
+		updateReq.IacType = plan.IacType.ValueString()
+	}
+	if !plan.DefaultJobAction.Equal(state.DefaultJobAction) {
+		updateReq.DefaultJobAction = plan.DefaultJobAction.ValueString()
+	}
+	if !plan.WorkerPoolID.Equal(state.WorkerPoolID) {
+		updateReq.WorkerPool = plan.WorkerPoolID.ValueString()
+	}
+	if !plan.Folder.Equal(state.Folder) {
+		updateReq.Folder = plan.Folder.ValueString()
+	}
+	if !plan.ExecutionMode.Equal(state.ExecutionMode) {
+		updateReq.ExecutionMode = plan.ExecutionMode.ValueString()
+	}
+	if !plan.AgentsEnabled.Equal(state.AgentsEnabled) {
+		v := plan.AgentsEnabled.ValueBool()
+		updateReq.AgentsEnabled = &v
+	}
+	if !plan.Tags.Equal(state.Tags) && !plan.Tags.IsNull() && !plan.Tags.IsUnknown() {
+		var tags map[string]string
+		diags = plan.Tags.ElementsAs(ctx, &tags, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		tagsAny := map[string]any{}
+		for k, v := range tags {
+			tagsAny[k] = v
+		}
+		updateReq.Tags = tagsAny
 	}
 
 	reqBody, err := json.Marshal(updateReq)
@@ -440,18 +608,8 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	// Update the model with the response data
-	plan.ID = types.StringValue(workspace.ID)
-	plan.Name = types.StringValue(workspace.Name)
-	plan.Description = types.StringValue(workspace.Description)
-	plan.Source = types.StringValue(workspace.Source)
-	plan.Branch = types.StringValue(workspace.Branch)
-	plan.TerraformVersion = types.StringValue(workspace.TerraformVersion)
-	plan.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
-	plan.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
-	plan.VCS = vcsToObject(workspace.VCS)
+	mapWorkspaceResponseToModel(ctx, &plan, workspace)
 
-	// Save updated info
 	diags = resp.State.Set(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 }
@@ -578,23 +736,10 @@ func (r *WorkspaceResource) ImportState(ctx context.Context, req resource.Import
 		return
 	}
 
-	// Create the state model with the fetched data
-	// Match the exact pattern used in Read method
 	var data WorkspaceResourceModel
-	data.ID = types.StringValue(workspace.ID)
 	data.OrganizationName = types.StringValue(organizationName)
-	data.Name = types.StringValue(workspace.Name)
-	data.Description = types.StringValue(workspace.Description)
-	data.Source = types.StringValue(workspace.Source)
-	data.Branch = types.StringValue(workspace.Branch)
-	data.TerraformVersion = types.StringValue(workspace.TerraformVersion)
-	data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
-	data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
-	data.VCS = vcsToObject(workspace.VCS)
-	// Note: VcsId is not set here, matching the Read method pattern
-	// VcsId is only used for input during create/update operations
+	mapWorkspaceResponseToModel(ctx, &data, *workspace)
 
-	// Set the state
 	diags := resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }

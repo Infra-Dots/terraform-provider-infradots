@@ -42,6 +42,15 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"terraform_version": "1.5.0",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:00:00Z",
+			"locked": false,
+			"auto_apply": false,
+			"iac_type": "TF",
+			"default_job_action": "plan",
+			"worker_pool": null,
+			"folder": "/",
+			"execution_mode": "Remote",
+			"tags": {},
+			"agents_enabled": false,
 			"vcs": {
 				"id": "vcs-12345",
 				"name": "github-connection",
@@ -69,6 +78,15 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"terraform_version": "1.5.0",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:00:00Z",
+			"locked": false,
+			"auto_apply": false,
+			"iac_type": "TF",
+			"default_job_action": "plan",
+			"worker_pool": null,
+			"folder": "/",
+			"execution_mode": "Remote",
+			"tags": {},
+			"agents_enabled": false,
 			"vcs": {
 				"id": "vcs-12345",
 				"name": "github-connection",
@@ -95,6 +113,15 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"terraform_version": "1.6.0",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:01:00Z",
+			"locked": false,
+			"auto_apply": false,
+			"iac_type": "TF",
+			"default_job_action": "plan",
+			"worker_pool": null,
+			"folder": "/",
+			"execution_mode": "Remote",
+			"tags": {},
+			"agents_enabled": false,
 			"vcs": {
 				"id": "vcs-12345",
 				"name": "github-connection",
@@ -130,6 +157,15 @@ func (m *MockWorkspaceRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			"terraform_version": "1.5.0",
 			"created_at": "2025-07-07T12:00:00Z",
 			"updated_at": "2025-07-07T12:00:00Z",
+			"locked": false,
+			"auto_apply": false,
+			"iac_type": "TF",
+			"default_job_action": "plan",
+			"worker_pool": null,
+			"folder": "/",
+			"execution_mode": "Remote",
+			"tags": {},
+			"agents_enabled": false,
 			"vcs": {
 				"id": "vcs-12345",
 				"name": "github-connection",
@@ -188,6 +224,14 @@ func TestWorkspaceResource_Create(t *testing.T) {
 	plan.Source = types.StringValue("https://github.com/test/repo")
 	plan.Branch = types.StringValue("main")
 	plan.TerraformVersion = types.StringValue("1.5.0")
+	plan.Locked = types.BoolValue(false)
+	plan.AutoApply = types.BoolValue(false)
+	plan.IacType = types.StringValue("TF")
+	plan.DefaultJobAction = types.StringValue("plan")
+	plan.Folder = types.StringValue("/")
+	plan.ExecutionMode = types.StringValue("Remote")
+	plan.AgentsEnabled = types.BoolValue(false)
+	plan.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	plan.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -255,6 +299,14 @@ func TestWorkspaceResource_Read(t *testing.T) {
 	state.ID = types.StringValue("3f340e3c-89f1-4321-bcde-eff34567890a")
 	state.OrganizationName = types.StringValue("test-org")
 	state.Name = types.StringValue("test-workspace")
+	state.Locked = types.BoolValue(false)
+	state.AutoApply = types.BoolValue(false)
+	state.IacType = types.StringValue("TF")
+	state.DefaultJobAction = types.StringValue("plan")
+	state.Folder = types.StringValue("/")
+	state.ExecutionMode = types.StringValue("Remote")
+	state.AgentsEnabled = types.BoolValue(false)
+	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -265,7 +317,6 @@ func TestWorkspaceResource_Read(t *testing.T) {
 		"updated_at":  types.StringType,
 	})
 
-	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}
 	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
 
@@ -322,6 +373,14 @@ func TestWorkspaceResource_Update(t *testing.T) {
 	state.Source = types.StringValue("https://github.com/test/repo")
 	state.Branch = types.StringValue("main")
 	state.TerraformVersion = types.StringValue("1.5.0")
+	state.Locked = types.BoolValue(false)
+	state.AutoApply = types.BoolValue(false)
+	state.IacType = types.StringValue("TF")
+	state.DefaultJobAction = types.StringValue("plan")
+	state.Folder = types.StringValue("/")
+	state.ExecutionMode = types.StringValue("Remote")
+	state.AgentsEnabled = types.BoolValue(false)
+	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -332,7 +391,6 @@ func TestWorkspaceResource_Update(t *testing.T) {
 		"updated_at":  types.StringType,
 	})
 
-	// Setup planned new state
 	var plan WorkspaceResourceModel
 	plan.ID = types.StringValue("3f340e3c-89f1-4321-bcde-eff34567890a")
 	plan.OrganizationName = types.StringValue("test-org")
@@ -341,6 +399,14 @@ func TestWorkspaceResource_Update(t *testing.T) {
 	plan.Source = types.StringValue("https://github.com/test/updated-repo")
 	plan.Branch = types.StringValue("develop")
 	plan.TerraformVersion = types.StringValue("1.6.0")
+	plan.Locked = types.BoolValue(false)
+	plan.AutoApply = types.BoolValue(false)
+	plan.IacType = types.StringValue("TF")
+	plan.DefaultJobAction = types.StringValue("plan")
+	plan.Folder = types.StringValue("/")
+	plan.ExecutionMode = types.StringValue("Remote")
+	plan.AgentsEnabled = types.BoolValue(false)
+	plan.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	plan.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -414,6 +480,14 @@ func TestWorkspaceResource_Delete(t *testing.T) {
 	state.ID = types.StringValue("3f340e3c-89f1-4321-bcde-eff34567890a")
 	state.OrganizationName = types.StringValue("test-org")
 	state.Name = types.StringValue("test-workspace")
+	state.Locked = types.BoolValue(false)
+	state.AutoApply = types.BoolValue(false)
+	state.IacType = types.StringValue("TF")
+	state.DefaultJobAction = types.StringValue("plan")
+	state.Folder = types.StringValue("/")
+	state.ExecutionMode = types.StringValue("Remote")
+	state.AgentsEnabled = types.BoolValue(false)
+	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -424,7 +498,6 @@ func TestWorkspaceResource_Delete(t *testing.T) {
 		"updated_at":  types.StringType,
 	})
 
-	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}
 	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
 

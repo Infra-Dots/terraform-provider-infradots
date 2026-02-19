@@ -1,0 +1,192 @@
+package internal
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+var _ datasource.DataSource = &WorkerPoolDataSource{}
+
+func NewWorkerPoolDataSource() datasource.DataSource {
+	return &WorkerPoolDataSource{}
+}
+
+type WorkerPoolDataSource struct {
+	provider *InfradotsProvider
+}
+
+type WorkerPoolDataSourceModel struct {
+	ID                 types.String `tfsdk:"id"`
+	OrganizationName   types.String `tfsdk:"organization_name"`
+	Name               types.String `tfsdk:"name"`
+	RestrictToAssigned types.Bool   `tfsdk:"restrict_to_assigned"`
+	WorkersCount       types.Int64  `tfsdk:"workers_count"`
+}
+
+func (d *WorkerPoolDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_worker_pool_data"
+}
+
+func (d *WorkerPoolDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "Fetches a worker pool by ID or by organization name and pool name.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Description: "The unique ID of the worker pool.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"organization_name": schema.StringAttribute{
+				Description: "The name of the organization.",
+				Required:    true,
+			},
+			"name": schema.StringAttribute{
+				Description: "The name of the worker pool.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"restrict_to_assigned": schema.BoolAttribute{
+				Description: "Whether this pool is restricted to assigned workspaces.",
+				Computed:    true,
+			},
+			"workers_count": schema.Int64Attribute{
+				Description: "Number of workers currently registered in this pool.",
+				Computed:    true,
+			},
+		},
+	}
+}
+
+func (d *WorkerPoolDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	provider, ok := req.ProviderData.(*InfradotsProvider)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("Expected *InfradotsProvider, got: %T", req.ProviderData),
+		)
+		return
+	}
+	d.provider = provider
+}
+
+func (d *WorkerPoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data WorkerPoolDataSourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	orgName := data.OrganizationName.ValueString()
+
+	if !data.ID.IsNull() && data.ID.ValueString() != "" {
+		url := fmt.Sprintf("https://%s/api/workers/%s/pools/%s/",
+			d.provider.host, orgName, data.ID.ValueString())
+
+		httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			resp.Diagnostics.AddError("Error creating request", err.Error())
+			return
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+d.provider.token)
+
+		httpResp, err := d.provider.client.Do(httpReq)
+		if err != nil {
+			resp.Diagnostics.AddError("HTTP request failed", err.Error())
+			return
+		}
+		defer httpResp.Body.Close()
+
+		if httpResp.StatusCode != 200 {
+			resp.Diagnostics.AddError("Read failed", fmt.Sprintf("Status code: %d", httpResp.StatusCode))
+			return
+		}
+
+		body, err := io.ReadAll(httpResp.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading response body", err.Error())
+			return
+		}
+
+		var pool WorkerPoolAPIResponse
+		err = json.Unmarshal(body, &pool)
+		if err != nil {
+			resp.Diagnostics.AddError("Error parsing response", err.Error())
+			return
+		}
+
+		data.ID = types.StringValue(pool.ID)
+		data.Name = types.StringValue(pool.Name)
+		data.RestrictToAssigned = types.BoolValue(pool.RestrictToAssigned)
+		data.WorkersCount = types.Int64Value(int64(pool.WorkersCount))
+	} else if !data.Name.IsNull() && data.Name.ValueString() != "" {
+		url := fmt.Sprintf("https://%s/api/workers/%s/pools/",
+			d.provider.host, orgName)
+
+		httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			resp.Diagnostics.AddError("Error creating request", err.Error())
+			return
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+d.provider.token)
+
+		httpResp, err := d.provider.client.Do(httpReq)
+		if err != nil {
+			resp.Diagnostics.AddError("HTTP request failed", err.Error())
+			return
+		}
+		defer httpResp.Body.Close()
+
+		if httpResp.StatusCode != 200 {
+			resp.Diagnostics.AddError("Read failed", fmt.Sprintf("Status code: %d", httpResp.StatusCode))
+			return
+		}
+
+		body, err := io.ReadAll(httpResp.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading response body", err.Error())
+			return
+		}
+
+		var pools []WorkerPoolAPIResponse
+		err = json.Unmarshal(body, &pools)
+		if err != nil {
+			resp.Diagnostics.AddError("Error parsing response", err.Error())
+			return
+		}
+
+		found := false
+		for _, pool := range pools {
+			if pool.Name == data.Name.ValueString() {
+				data.ID = types.StringValue(pool.ID)
+				data.Name = types.StringValue(pool.Name)
+				data.RestrictToAssigned = types.BoolValue(pool.RestrictToAssigned)
+				data.WorkersCount = types.Int64Value(int64(pool.WorkersCount))
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			resp.Diagnostics.AddError(
+				"Worker pool not found",
+				fmt.Sprintf("No worker pool with name '%s' found in organization '%s'", data.Name.ValueString(), orgName),
+			)
+			return
+		}
+	} else {
+		resp.Diagnostics.AddError("Missing required parameter", "Either id or name must be specified")
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
