@@ -95,7 +95,7 @@ func (r *TeamResource) Configure(ctx context.Context, req resource.ConfigureRequ
 }
 
 func teamMembersToList(members []map[string]string) types.List {
-	if members == nil || len(members) == 0 {
+	if len(members) == 0 {
 		return types.ListValueMust(types.StringType, []attr.Value{})
 	}
 	memberAttrs := make([]attr.Value, 0, len(members))

@@ -298,7 +298,7 @@ func (r *UserResource) readUser(ctx context.Context, data *UserResourceModel) di
 	}
 
 	// Convert teams to list
-	if foundUser.Teams != nil && len(foundUser.Teams) > 0 {
+	if len(foundUser.Teams) > 0 {
 		teamAttrs := make([]attr.Value, len(foundUser.Teams))
 		for i, team := range foundUser.Teams {
 			// Teams might be strings or objects, handle both
