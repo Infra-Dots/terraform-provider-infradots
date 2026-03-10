@@ -29,10 +29,10 @@ func NewUserResource() resource.Resource {
 type UserResourceModel struct {
 	ID               types.String `tfsdk:"id"`                // User UUID
 	OrganizationName types.String `tfsdk:"organization_name"` // Name of the organization
-	Email            types.String `tfsdk:"email"`            // User email address
-	LastLogin        types.String `tfsdk:"last_login"`       // Last login timestamp
-	Teams            types.List   `tfsdk:"teams"`           // List of teams
-	Permissions      types.List   `tfsdk:"permissions"`      // List of permissions
+	Email            types.String `tfsdk:"email"`             // User email address
+	LastLogin        types.String `tfsdk:"last_login"`        // Last login timestamp
+	Teams            types.List   `tfsdk:"teams"`             // List of teams
+	Permissions      types.List   `tfsdk:"permissions"`       // List of permissions
 }
 
 // UserAPIResponse represents the JSON structure returned by the API
@@ -471,4 +471,3 @@ func (r *UserResource) ImportState(ctx context.Context, req resource.ImportState
 	diags := resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
-

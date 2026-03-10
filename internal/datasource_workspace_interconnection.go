@@ -31,8 +31,8 @@ type WorkspaceInterconnectionDataSourceModel struct {
 }
 
 type InterconnectionDataSourceAPIResponse struct {
-	ID                  interface{}             `json:"id"`
-	Condition           string                  `json:"condition"`
+	ID                  interface{}               `json:"id"`
+	Condition           string                    `json:"condition"`
 	ConnectedWorkspaces []InterconnectedWorkspace `json:"connected_workspaces"`
 }
 

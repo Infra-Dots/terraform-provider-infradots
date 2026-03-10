@@ -38,9 +38,9 @@ type WorkspaceInterconnectionResourceModel struct {
 }
 
 type InterconnectionListResponse struct {
-	ID                    int                        `json:"id"`
-	Condition             string                     `json:"condition"`
-	ConnectedWorkspaces   []InterconnectedWorkspace  `json:"connected_workspaces"`
+	ID                  int                       `json:"id"`
+	Condition           string                    `json:"condition"`
+	ConnectedWorkspaces []InterconnectedWorkspace `json:"connected_workspaces"`
 }
 
 type InterconnectedWorkspace struct {
@@ -54,7 +54,7 @@ type InterconnectionConnectRequest struct {
 }
 
 type InterconnectionConnectResponse struct {
-	Connected           []string `json:"connected"`
+	Connected            []string `json:"connected"`
 	WorkspaceNotExisting []string `json:"workspace_not_existing"`
 }
 

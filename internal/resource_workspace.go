@@ -27,99 +27,99 @@ func NewWorkspaceResource() resource.Resource {
 }
 
 type WorkspaceResourceModel struct {
-	ID               types.String `tfsdk:"id"`                // UUID
-	OrganizationName types.String `tfsdk:"organization_name"` // Name of the organization
-	Name             types.String `tfsdk:"name"`
-	Description      types.String `tfsdk:"description"`
-	Source           types.String `tfsdk:"source"`
-	Branch           types.String `tfsdk:"branch"`
-	TerraformVersion types.String `tfsdk:"terraform_version"`
-	CreatedAt        types.String `tfsdk:"created_at"` // timestamp
-	UpdatedAt        types.String `tfsdk:"updated_at"` // timestamp
-	VcsId            types.String `tfsdk:"vcs_id"`     // UUID of a VCS provider in IDP
-	VCS              types.Object `tfsdk:"vcs"`        // VCS object as returned by API
-	Locked           types.Bool   `tfsdk:"locked"`
-	AutoApply        types.Bool   `tfsdk:"auto_apply"`
-	IacType          types.String `tfsdk:"iac_type"`
-	DefaultJobAction types.String `tfsdk:"default_job_action"`
-	WorkerPoolID     types.String `tfsdk:"worker_pool_id"`
-	Folder           types.String `tfsdk:"folder"`
-	ExecutionMode    types.String `tfsdk:"execution_mode"`
-	Tags                 types.Map    `tfsdk:"tags"`
-	AgentsEnabled        types.Bool   `tfsdk:"agents_enabled"`
-	DriftDetectionEnabled types.Bool  `tfsdk:"drift_detection_enabled"`
-	RemedyDrift          types.Bool   `tfsdk:"remedy_drift"`
-	AutoImplementChanges types.Bool   `tfsdk:"auto_implement_changes"`
-	SshId               types.String `tfsdk:"ssh_id"`
-	ModuleSshKey        types.String `tfsdk:"module_ssh_key"`
+	ID                    types.String `tfsdk:"id"`                // UUID
+	OrganizationName      types.String `tfsdk:"organization_name"` // Name of the organization
+	Name                  types.String `tfsdk:"name"`
+	Description           types.String `tfsdk:"description"`
+	Source                types.String `tfsdk:"source"`
+	Branch                types.String `tfsdk:"branch"`
+	TerraformVersion      types.String `tfsdk:"terraform_version"`
+	CreatedAt             types.String `tfsdk:"created_at"` // timestamp
+	UpdatedAt             types.String `tfsdk:"updated_at"` // timestamp
+	VcsId                 types.String `tfsdk:"vcs_id"`     // UUID of a VCS provider in IDP
+	VCS                   types.Object `tfsdk:"vcs"`        // VCS object as returned by API
+	Locked                types.Bool   `tfsdk:"locked"`
+	AutoApply             types.Bool   `tfsdk:"auto_apply"`
+	IacType               types.String `tfsdk:"iac_type"`
+	DefaultJobAction      types.String `tfsdk:"default_job_action"`
+	WorkerPoolID          types.String `tfsdk:"worker_pool_id"`
+	Folder                types.String `tfsdk:"folder"`
+	ExecutionMode         types.String `tfsdk:"execution_mode"`
+	Tags                  types.Map    `tfsdk:"tags"`
+	AgentsEnabled         types.Bool   `tfsdk:"agents_enabled"`
+	DriftDetectionEnabled types.Bool   `tfsdk:"drift_detection_enabled"`
+	RemedyDrift           types.Bool   `tfsdk:"remedy_drift"`
+	AutoImplementChanges  types.Bool   `tfsdk:"auto_implement_changes"`
+	SshId                 types.String `tfsdk:"ssh_id"`
+	ModuleSshKey          types.String `tfsdk:"module_ssh_key"`
 }
 
 type WorkspaceAPIResponse struct {
-	ID               string          `json:"id"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description"`
-	Source           string          `json:"source"`
-	Branch           string          `json:"branch"`
-	TerraformVersion string          `json:"terraform_version"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
-	VCS              *VCSAPIResponse `json:"vcs"`
-	Locked           bool            `json:"locked"`
-	AutoApply        bool            `json:"auto_apply"`
-	IacType          string          `json:"iac_type"`
-	DefaultJobAction string          `json:"default_job_action"`
-	WorkerPool       *string         `json:"worker_pool"`
-	Folder           string          `json:"folder"`
-	ExecutionMode    string          `json:"execution_mode"`
-	Tags                 map[string]any  `json:"tags"`
-	AgentsEnabled        bool            `json:"agents_enabled"`
-	DriftDetectionEnabled *bool          `json:"drift_detection_enabled"`
-	RemedyDrift          *bool           `json:"remedy_drift"`
-	AutoImplementChanges *bool           `json:"auto_implement_changes"`
-	SshId               string          `json:"ssh_id"`
-	ModuleSshKey        string          `json:"module_ssh_key"`
+	ID                    string          `json:"id"`
+	Name                  string          `json:"name"`
+	Description           string          `json:"description"`
+	Source                string          `json:"source"`
+	Branch                string          `json:"branch"`
+	TerraformVersion      string          `json:"terraform_version"`
+	CreatedAt             time.Time       `json:"created_at"`
+	UpdatedAt             time.Time       `json:"updated_at"`
+	VCS                   *VCSAPIResponse `json:"vcs"`
+	Locked                bool            `json:"locked"`
+	AutoApply             bool            `json:"auto_apply"`
+	IacType               string          `json:"iac_type"`
+	DefaultJobAction      string          `json:"default_job_action"`
+	WorkerPool            *string         `json:"worker_pool"`
+	Folder                string          `json:"folder"`
+	ExecutionMode         string          `json:"execution_mode"`
+	Tags                  map[string]any  `json:"tags"`
+	AgentsEnabled         bool            `json:"agents_enabled"`
+	DriftDetectionEnabled *bool           `json:"drift_detection_enabled"`
+	RemedyDrift           *bool           `json:"remedy_drift"`
+	AutoImplementChanges  *bool           `json:"auto_implement_changes"`
+	SshId                 string          `json:"ssh_id"`
+	ModuleSshKey          string          `json:"module_ssh_key"`
 }
 
 type WorkspaceCreateRequest struct {
-	Name             string         `json:"name"`
-	Description      string         `json:"description,omitempty"`
-	Source           string         `json:"source"`
-	Branch           string         `json:"branch"`
-	TerraformVersion string         `json:"terraform_version"`
-	AutoApply        bool           `json:"auto_apply"`
-	IacType          string         `json:"iac_type,omitempty"`
-	DefaultJobAction string         `json:"default_job_action,omitempty"`
-	WorkerPool       string         `json:"worker_pool,omitempty"`
-	Folder           string         `json:"folder,omitempty"`
-	ExecutionMode    string         `json:"execution_mode,omitempty"`
-	Tags                 map[string]any `json:"tags,omitempty"`
-	AgentsEnabled        bool           `json:"agents_enabled"`
-	DriftDetectionEnabled *bool         `json:"drift_detection_enabled,omitempty"`
-	RemedyDrift          *bool          `json:"remedy_drift,omitempty"`
-	AutoImplementChanges *bool          `json:"auto_implement_changes,omitempty"`
-	SshId               string         `json:"ssh_id,omitempty"`
-	ModuleSshKey        string         `json:"module_ssh_key,omitempty"`
+	Name                  string         `json:"name"`
+	Description           string         `json:"description,omitempty"`
+	Source                string         `json:"source"`
+	Branch                string         `json:"branch"`
+	TerraformVersion      string         `json:"terraform_version"`
+	AutoApply             bool           `json:"auto_apply"`
+	IacType               string         `json:"iac_type,omitempty"`
+	DefaultJobAction      string         `json:"default_job_action,omitempty"`
+	WorkerPool            string         `json:"worker_pool,omitempty"`
+	Folder                string         `json:"folder,omitempty"`
+	ExecutionMode         string         `json:"execution_mode,omitempty"`
+	Tags                  map[string]any `json:"tags,omitempty"`
+	AgentsEnabled         bool           `json:"agents_enabled"`
+	DriftDetectionEnabled *bool          `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift           *bool          `json:"remedy_drift,omitempty"`
+	AutoImplementChanges  *bool          `json:"auto_implement_changes,omitempty"`
+	SshId                 string         `json:"ssh_id,omitempty"`
+	ModuleSshKey          string         `json:"module_ssh_key,omitempty"`
 }
 
 type WorkspaceUpdateRequest struct {
-	Name             string         `json:"name,omitempty"`
-	Description      string         `json:"description,omitempty"`
-	Source           string         `json:"source,omitempty"`
-	Branch           string         `json:"branch,omitempty"`
-	TerraformVersion string         `json:"terraform_version,omitempty"`
-	AutoApply        *bool          `json:"auto_apply,omitempty"`
-	IacType          string         `json:"iac_type,omitempty"`
-	DefaultJobAction string         `json:"default_job_action,omitempty"`
-	WorkerPool       string         `json:"worker_pool,omitempty"`
-	Folder           string         `json:"folder,omitempty"`
-	ExecutionMode    string         `json:"execution_mode,omitempty"`
-	Tags                 map[string]any `json:"tags,omitempty"`
-	AgentsEnabled        *bool          `json:"agents_enabled,omitempty"`
-	DriftDetectionEnabled *bool         `json:"drift_detection_enabled,omitempty"`
-	RemedyDrift          *bool          `json:"remedy_drift,omitempty"`
-	AutoImplementChanges *bool          `json:"auto_implement_changes,omitempty"`
-	SshId               string         `json:"ssh_id,omitempty"`
-	ModuleSshKey        string         `json:"module_ssh_key,omitempty"`
+	Name                  string         `json:"name,omitempty"`
+	Description           string         `json:"description,omitempty"`
+	Source                string         `json:"source,omitempty"`
+	Branch                string         `json:"branch,omitempty"`
+	TerraformVersion      string         `json:"terraform_version,omitempty"`
+	AutoApply             *bool          `json:"auto_apply,omitempty"`
+	IacType               string         `json:"iac_type,omitempty"`
+	DefaultJobAction      string         `json:"default_job_action,omitempty"`
+	WorkerPool            string         `json:"worker_pool,omitempty"`
+	Folder                string         `json:"folder,omitempty"`
+	ExecutionMode         string         `json:"execution_mode,omitempty"`
+	Tags                  map[string]any `json:"tags,omitempty"`
+	AgentsEnabled         *bool          `json:"agents_enabled,omitempty"`
+	DriftDetectionEnabled *bool          `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift           *bool          `json:"remedy_drift,omitempty"`
+	AutoImplementChanges  *bool          `json:"auto_implement_changes,omitempty"`
+	SshId                 string         `json:"ssh_id,omitempty"`
+	ModuleSshKey          string         `json:"module_ssh_key,omitempty"`
 }
 
 type WorkspaceResource struct {
