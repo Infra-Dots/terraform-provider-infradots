@@ -109,6 +109,12 @@ func (p *InfradotsProvider) Resources(_ context.Context) []func() resource.Resou
 		NewPermissionResource,
 		NewWorkerPoolResource,
 		NewWorkspaceInterconnectionResource,
+		NewServiceAccountResource,
+		NewServiceAccountTokenResource,
+		NewIntegrationResource,
+		NewWorkspaceIntegrationResource,
+		NewModelProviderResource,
+		NewWorkspaceScheduleResource,
 	}
 }
 
@@ -120,5 +126,12 @@ func (p *InfradotsProvider) DataSources(_ context.Context) []func() datasource.D
 		NewVCSDataSource,
 		NewTeamDataSource,
 		NewWorkerPoolDataSource,
+		NewVariableDataSource,
+		NewWorkspaceInterconnectionDataSource,
+		NewUserDataSource,
+		NewPermissionDataSource,
+		NewModelProviderDataSource,
+		NewIntegrationDataSource,
+		NewWorkspaceScheduleDataSource,
 	}
 }
