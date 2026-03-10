@@ -24,7 +24,6 @@ jobs:
           go-version: '1.23'
 
       - name: Build provider
-        working-directory: .
         run: |
           go build -o terraform-provider-infradots
 
@@ -33,18 +32,25 @@ jobs:
         with:
           tofu_version: "1.10.7"
 
-      - name: Setup provider
-        working-directory: .github/tofu-tests
+      - name: Setup local provider override
         run: |
-          mkdir -p ~/.terraform.d/plugins/registry.terraform.io/local/infra-dots/infradots/1.3.0/linux_amd64/
-          cp ../../terraform-provider-infradots ~/.terraform.d/plugins/registry.terraform.io/local/infra-dots/infradots/1.3.0/linux_amd64/
+          mkdir -p /home/runner/work/local-provider
+          cp terraform-provider-infradots /home/runner/work/local-provider/
+          cat > ~/.tofurc <<'EOF'
+          provider_installation {
+            dev_overrides {
+              "infra-dots/infradots" = "/home/runner/work/local-provider"
+            }
+            direct {}
+          }
+          EOF
 
       - name: Initialize OpenTofu
         working-directory: .github/tofu-tests
         env:
           TF_LOG: INFO
         run: |
-          tofu init
+          tofu init -upgrade
 
       - name: Run OpenTofu Apply
         working-directory: .github/tofu-tests
