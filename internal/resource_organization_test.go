@@ -160,6 +160,7 @@ func TestOrganizationResource_Create(t *testing.T) {
 
 	var plan OrganizationResourceModel
 	plan.Name = types.StringValue("test-org")
+	plan.Tags = types.MapNull(types.StringType)
 
 	schemaResp := &resource.SchemaResponse{}
 	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
@@ -206,6 +207,7 @@ func TestOrganizationResource_Read(t *testing.T) {
 	var state OrganizationResourceModel
 	state.ID = types.StringValue("2e240d2c-78e0-4832-abdc-daa33477a238")
 	state.Name = types.StringValue("test-org")
+	state.Tags = types.MapNull(types.StringType)
 
 	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}
@@ -261,6 +263,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	state.Name = types.StringValue("test-org")
 	state.ExecutionMode = types.StringValue("remote")
 	state.AgentsEnabled = types.BoolValue(true)
+	state.Tags = types.MapNull(types.StringType)
 
 	// Setup planned new state
 	var plan OrganizationResourceModel
@@ -268,6 +271,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	plan.Name = types.StringValue("updated-org")
 	plan.ExecutionMode = types.StringValue("Local")
 	plan.AgentsEnabled = types.BoolValue(false)
+	plan.Tags = types.MapNull(types.StringType)
 
 	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}
@@ -325,6 +329,7 @@ func TestOrganizationResource_Delete(t *testing.T) {
 	var state OrganizationResourceModel
 	state.ID = types.StringValue("2e240d2c-78e0-4832-abdc-daa33477a238")
 	state.Name = types.StringValue("test-org")
+	state.Tags = types.MapNull(types.StringType)
 
 	schemaResp := &resource.SchemaResponse{}
 	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)

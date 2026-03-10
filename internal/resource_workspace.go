@@ -45,8 +45,13 @@ type WorkspaceResourceModel struct {
 	WorkerPoolID     types.String `tfsdk:"worker_pool_id"`
 	Folder           types.String `tfsdk:"folder"`
 	ExecutionMode    types.String `tfsdk:"execution_mode"`
-	Tags             types.Map    `tfsdk:"tags"`
-	AgentsEnabled    types.Bool   `tfsdk:"agents_enabled"`
+	Tags                 types.Map    `tfsdk:"tags"`
+	AgentsEnabled        types.Bool   `tfsdk:"agents_enabled"`
+	DriftDetectionEnabled types.Bool  `tfsdk:"drift_detection_enabled"`
+	RemedyDrift          types.Bool   `tfsdk:"remedy_drift"`
+	AutoImplementChanges types.Bool   `tfsdk:"auto_implement_changes"`
+	SshId               types.String `tfsdk:"ssh_id"`
+	ModuleSshKey        types.String `tfsdk:"module_ssh_key"`
 }
 
 type WorkspaceAPIResponse struct {
@@ -66,8 +71,13 @@ type WorkspaceAPIResponse struct {
 	WorkerPool       *string         `json:"worker_pool"`
 	Folder           string          `json:"folder"`
 	ExecutionMode    string          `json:"execution_mode"`
-	Tags             map[string]any  `json:"tags"`
-	AgentsEnabled    bool            `json:"agents_enabled"`
+	Tags                 map[string]any  `json:"tags"`
+	AgentsEnabled        bool            `json:"agents_enabled"`
+	DriftDetectionEnabled *bool          `json:"drift_detection_enabled"`
+	RemedyDrift          *bool           `json:"remedy_drift"`
+	AutoImplementChanges *bool           `json:"auto_implement_changes"`
+	SshId               string          `json:"ssh_id"`
+	ModuleSshKey        string          `json:"module_ssh_key"`
 }
 
 type WorkspaceCreateRequest struct {
@@ -82,8 +92,13 @@ type WorkspaceCreateRequest struct {
 	WorkerPool       string         `json:"worker_pool,omitempty"`
 	Folder           string         `json:"folder,omitempty"`
 	ExecutionMode    string         `json:"execution_mode,omitempty"`
-	Tags             map[string]any `json:"tags,omitempty"`
-	AgentsEnabled    bool           `json:"agents_enabled"`
+	Tags                 map[string]any `json:"tags,omitempty"`
+	AgentsEnabled        bool           `json:"agents_enabled"`
+	DriftDetectionEnabled *bool         `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift          *bool          `json:"remedy_drift,omitempty"`
+	AutoImplementChanges *bool          `json:"auto_implement_changes,omitempty"`
+	SshId               string         `json:"ssh_id,omitempty"`
+	ModuleSshKey        string         `json:"module_ssh_key,omitempty"`
 }
 
 type WorkspaceUpdateRequest struct {
@@ -98,8 +113,13 @@ type WorkspaceUpdateRequest struct {
 	WorkerPool       string         `json:"worker_pool,omitempty"`
 	Folder           string         `json:"folder,omitempty"`
 	ExecutionMode    string         `json:"execution_mode,omitempty"`
-	Tags             map[string]any `json:"tags,omitempty"`
-	AgentsEnabled    *bool          `json:"agents_enabled,omitempty"`
+	Tags                 map[string]any `json:"tags,omitempty"`
+	AgentsEnabled        *bool          `json:"agents_enabled,omitempty"`
+	DriftDetectionEnabled *bool         `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift          *bool          `json:"remedy_drift,omitempty"`
+	AutoImplementChanges *bool          `json:"auto_implement_changes,omitempty"`
+	SshId               string         `json:"ssh_id,omitempty"`
+	ModuleSshKey        string         `json:"module_ssh_key,omitempty"`
 }
 
 type WorkspaceResource struct {
@@ -215,6 +235,28 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
+			"drift_detection_enabled": schema.BoolAttribute{
+				Description: "Whether drift detection is enabled. If null, inherits from the organization.",
+				Optional:    true,
+			},
+			"remedy_drift": schema.BoolAttribute{
+				Description: "Whether to remedy drift automatically. If null, inherits from the organization.",
+				Optional:    true,
+			},
+			"auto_implement_changes": schema.BoolAttribute{
+				Description: "Whether to auto-implement changes. If null, inherits from the organization.",
+				Optional:    true,
+			},
+			"ssh_id": schema.StringAttribute{
+				Description: "ID of the SSH key to use for the workspace.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"module_ssh_key": schema.StringAttribute{
+				Description: "SSH key for accessing private modules.",
+				Optional:    true,
+				Computed:    true,
+			},
 			"vcs": schema.SingleNestedAttribute{
 				Description: "VCS connection details associated with this workspace.",
 				Computed:    true,
@@ -325,6 +367,23 @@ func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceMod
 		data.ExecutionMode = types.StringValue(workspace.ExecutionMode)
 	}
 	data.AgentsEnabled = types.BoolValue(workspace.AgentsEnabled)
+	if workspace.DriftDetectionEnabled != nil {
+		data.DriftDetectionEnabled = types.BoolValue(*workspace.DriftDetectionEnabled)
+	} else {
+		data.DriftDetectionEnabled = types.BoolNull()
+	}
+	if workspace.RemedyDrift != nil {
+		data.RemedyDrift = types.BoolValue(*workspace.RemedyDrift)
+	} else {
+		data.RemedyDrift = types.BoolNull()
+	}
+	if workspace.AutoImplementChanges != nil {
+		data.AutoImplementChanges = types.BoolValue(*workspace.AutoImplementChanges)
+	} else {
+		data.AutoImplementChanges = types.BoolNull()
+	}
+	data.SshId = types.StringValue(workspace.SshId)
+	data.ModuleSshKey = types.StringValue(workspace.ModuleSshKey)
 	if workspace.Tags != nil {
 		tagMap := map[string]attr.Value{}
 		for k, v := range workspace.Tags {
@@ -372,6 +431,24 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 			tagsAny[k] = v
 		}
 		createReq.Tags = tagsAny
+	}
+	if !data.DriftDetectionEnabled.IsNull() {
+		v := data.DriftDetectionEnabled.ValueBool()
+		createReq.DriftDetectionEnabled = &v
+	}
+	if !data.RemedyDrift.IsNull() {
+		v := data.RemedyDrift.ValueBool()
+		createReq.RemedyDrift = &v
+	}
+	if !data.AutoImplementChanges.IsNull() {
+		v := data.AutoImplementChanges.ValueBool()
+		createReq.AutoImplementChanges = &v
+	}
+	if !data.SshId.IsNull() {
+		createReq.SshId = data.SshId.ValueString()
+	}
+	if !data.ModuleSshKey.IsNull() {
+		createReq.ModuleSshKey = data.ModuleSshKey.ValueString()
 	}
 
 	reqBody, err := json.Marshal(createReq)
@@ -555,6 +632,30 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 			tagsAny[k] = v
 		}
 		updateReq.Tags = tagsAny
+	}
+	if !plan.DriftDetectionEnabled.Equal(state.DriftDetectionEnabled) {
+		if !plan.DriftDetectionEnabled.IsNull() {
+			v := plan.DriftDetectionEnabled.ValueBool()
+			updateReq.DriftDetectionEnabled = &v
+		}
+	}
+	if !plan.RemedyDrift.Equal(state.RemedyDrift) {
+		if !plan.RemedyDrift.IsNull() {
+			v := plan.RemedyDrift.ValueBool()
+			updateReq.RemedyDrift = &v
+		}
+	}
+	if !plan.AutoImplementChanges.Equal(state.AutoImplementChanges) {
+		if !plan.AutoImplementChanges.IsNull() {
+			v := plan.AutoImplementChanges.ValueBool()
+			updateReq.AutoImplementChanges = &v
+		}
+	}
+	if !plan.SshId.Equal(state.SshId) && !plan.SshId.IsNull() {
+		updateReq.SshId = plan.SshId.ValueString()
+	}
+	if !plan.ModuleSshKey.Equal(state.ModuleSshKey) && !plan.ModuleSshKey.IsNull() {
+		updateReq.ModuleSshKey = plan.ModuleSshKey.ValueString()
 	}
 
 	reqBody, err := json.Marshal(updateReq)

@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -29,25 +31,32 @@ func NewOrganizationResource() resource.Resource {
 }
 
 type OrganizationResourceModel struct {
-	ID            types.String `tfsdk:"id"`
-	Name          types.String `tfsdk:"name"`
-	CreatedAt     types.String `tfsdk:"created_at"`
-	UpdatedAt     types.String `tfsdk:"updated_at"`
-	ExecutionMode types.String `tfsdk:"execution_mode"` // execution mode (Remote, Local)
-	AgentsEnabled types.Bool   `tfsdk:"agents_enabled"` // boolean indicating if IDP agents are enabled
+	ID                   types.String `tfsdk:"id"`
+	Name                 types.String `tfsdk:"name"`
+	CreatedAt            types.String `tfsdk:"created_at"`
+	UpdatedAt            types.String `tfsdk:"updated_at"`
+	ExecutionMode        types.String `tfsdk:"execution_mode"` // execution mode (Remote, Local)
+	AgentsEnabled        types.Bool   `tfsdk:"agents_enabled"` // boolean indicating if IDP agents are enabled
+	Tags                 types.Map    `tfsdk:"tags"`
+	DriftDetectionEnabled types.Bool  `tfsdk:"drift_detection_enabled"`
+	RemedyDrift          types.Bool   `tfsdk:"remedy_drift"`
+	AutoImplementChanges types.Bool   `tfsdk:"auto_implement_changes"`
 }
 
 type OrganizationAPIResponse struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Members       []Member       `json:"members"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Subscription  map[string]any `json:"subscription"`
-	Tags          map[string]any `json:"tags"`
-	Teams         []Team         `json:"teams"`
-	ExecutionMode string         `json:"execution_mode"`
-	AgentsEnabled bool           `json:"agents_enabled"`
+	ID                   string         `json:"id"`
+	Name                 string         `json:"name"`
+	Members              []Member       `json:"members"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	Subscription         map[string]any `json:"subscription"`
+	Tags                 map[string]any `json:"tags"`
+	Teams                []Team         `json:"teams"`
+	ExecutionMode        string         `json:"execution_mode"`
+	AgentsEnabled        bool           `json:"agents_enabled"`
+	DriftDetectionEnabled bool          `json:"drift_detection_enabled"`
+	RemedyDrift          bool           `json:"remedy_drift"`
+	AutoImplementChanges bool           `json:"auto_implement_changes"`
 }
 
 type Member struct {
@@ -59,9 +68,13 @@ type Team struct {
 }
 
 type OrganizationUpdateRequest struct {
-	Name          string `json:"name,omitempty"`
-	ExecutionMode string `json:"execution_mode,omitempty"`
-	AgentsEnabled bool   `json:"agents_enabled,omitempty"`
+	Name                 string         `json:"name,omitempty"`
+	ExecutionMode        string         `json:"execution_mode,omitempty"`
+	AgentsEnabled        bool           `json:"agents_enabled,omitempty"`
+	Tags                 map[string]any `json:"tags,omitempty"`
+	DriftDetectionEnabled *bool         `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift          *bool          `json:"remedy_drift,omitempty"`
+	AutoImplementChanges *bool          `json:"auto_implement_changes,omitempty"`
 }
 
 type OrganizationResource struct {
@@ -108,6 +121,31 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
 			},
+			"tags": schema.MapAttribute{
+				Description: "Tags for the organization.",
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+				Default:     mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
+			},
+			"drift_detection_enabled": schema.BoolAttribute{
+				Description: "Whether drift detection is enabled for the organization.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"remedy_drift": schema.BoolAttribute{
+				Description: "Whether to automatically remedy detected drift.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"auto_implement_changes": schema.BoolAttribute{
+				Description: "Whether to automatically implement changes.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
 		},
 	}
 }
@@ -128,10 +166,31 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
+	driftDetection := data.DriftDetectionEnabled.ValueBool()
+	remedyDrift := data.RemedyDrift.ValueBool()
+	autoImplement := data.AutoImplementChanges.ValueBool()
+
 	createReq := OrganizationUpdateRequest{
-		Name:          data.Name.ValueString(),
-		ExecutionMode: data.ExecutionMode.ValueString(),
-		AgentsEnabled: data.AgentsEnabled.ValueBool(),
+		Name:                 data.Name.ValueString(),
+		ExecutionMode:        data.ExecutionMode.ValueString(),
+		AgentsEnabled:        data.AgentsEnabled.ValueBool(),
+		DriftDetectionEnabled: &driftDetection,
+		RemedyDrift:          &remedyDrift,
+		AutoImplementChanges: &autoImplement,
+	}
+
+	if !data.Tags.IsNull() && !data.Tags.IsUnknown() {
+		var tags map[string]string
+		diags = data.Tags.ElementsAs(ctx, &tags, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		tagsAny := map[string]any{}
+		for k, v := range tags {
+			tagsAny[k] = v
+		}
+		createReq.Tags = tagsAny
 	}
 
 	reqBody, err := json.Marshal(createReq)
@@ -183,6 +242,19 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	data.UpdatedAt = types.StringValue(organization.UpdatedAt.Format(time.RFC3339))
 	data.ExecutionMode = types.StringValue(strings.ToLower(organization.ExecutionMode))
 	data.AgentsEnabled = types.BoolValue(organization.AgentsEnabled)
+	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
+	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
+	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+
+	if organization.Tags != nil {
+		tagMap := map[string]attr.Value{}
+		for k, v := range organization.Tags {
+			tagMap[k] = types.StringValue(fmt.Sprintf("%v", v))
+		}
+		data.Tags = types.MapValueMust(types.StringType, tagMap)
+	} else {
+		data.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	}
 
 	diags = resp.State.Set(ctx, &data)
 	tflog.Info(ctx, "Module Resource Created", map[string]any{"success": true})
@@ -242,6 +314,19 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 	data.UpdatedAt = types.StringValue(organization.UpdatedAt.Format(time.RFC3339))
 	data.ExecutionMode = types.StringValue(organization.ExecutionMode)
 	data.AgentsEnabled = types.BoolValue(organization.AgentsEnabled)
+	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
+	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
+	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+
+	if organization.Tags != nil {
+		tagMap := map[string]attr.Value{}
+		for k, v := range organization.Tags {
+			tagMap[k] = types.StringValue(fmt.Sprintf("%v", v))
+		}
+		data.Tags = types.MapValueMust(types.StringType, tagMap)
+	} else {
+		data.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	}
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -274,6 +359,35 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 
 	if !plan.AgentsEnabled.Equal(state.AgentsEnabled) {
 		updateReq.AgentsEnabled = plan.AgentsEnabled.ValueBool()
+	}
+
+	if !plan.DriftDetectionEnabled.Equal(state.DriftDetectionEnabled) {
+		v := plan.DriftDetectionEnabled.ValueBool()
+		updateReq.DriftDetectionEnabled = &v
+	}
+
+	if !plan.RemedyDrift.Equal(state.RemedyDrift) {
+		v := plan.RemedyDrift.ValueBool()
+		updateReq.RemedyDrift = &v
+	}
+
+	if !plan.AutoImplementChanges.Equal(state.AutoImplementChanges) {
+		v := plan.AutoImplementChanges.ValueBool()
+		updateReq.AutoImplementChanges = &v
+	}
+
+	if !plan.Tags.Equal(state.Tags) && !plan.Tags.IsNull() && !plan.Tags.IsUnknown() {
+		var tags map[string]string
+		diags = plan.Tags.ElementsAs(ctx, &tags, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		tagsAny := map[string]any{}
+		for k, v := range tags {
+			tagsAny[k] = v
+		}
+		updateReq.Tags = tagsAny
 	}
 
 	reqBody, err := json.Marshal(updateReq)
@@ -326,6 +440,19 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	plan.UpdatedAt = types.StringValue(organization.UpdatedAt.Format(time.RFC3339))
 	plan.ExecutionMode = types.StringValue(organization.ExecutionMode)
 	plan.AgentsEnabled = types.BoolValue(organization.AgentsEnabled)
+	plan.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
+	plan.RemedyDrift = types.BoolValue(organization.RemedyDrift)
+	plan.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+
+	if organization.Tags != nil {
+		tagMap := map[string]attr.Value{}
+		for k, v := range organization.Tags {
+			tagMap[k] = types.StringValue(fmt.Sprintf("%v", v))
+		}
+		plan.Tags = types.MapValueMust(types.StringType, tagMap)
+	} else {
+		plan.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	}
 
 	diags = resp.State.Set(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -429,6 +556,19 @@ func (r *OrganizationResource) ImportState(ctx context.Context, req resource.Imp
 	data.UpdatedAt = types.StringValue(organization.UpdatedAt.Format(time.RFC3339))
 	data.ExecutionMode = types.StringValue(strings.ToLower(organization.ExecutionMode))
 	data.AgentsEnabled = types.BoolValue(organization.AgentsEnabled)
+	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
+	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
+	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+
+	if organization.Tags != nil {
+		tagMap := map[string]attr.Value{}
+		for k, v := range organization.Tags {
+			tagMap[k] = types.StringValue(fmt.Sprintf("%v", v))
+		}
+		data.Tags = types.MapValueMust(types.StringType, tagMap)
+	} else {
+		data.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	}
 
 	diags := resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
