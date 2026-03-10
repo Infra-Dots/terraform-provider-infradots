@@ -9,11 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	tflog "github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -37,38 +39,53 @@ type VCSResourceModel struct {
 	Description      types.String `tfsdk:"description"`       // Optional description
 	CreatedAt        types.String `tfsdk:"created_at"`        // Timestamp
 	UpdatedAt        types.String `tfsdk:"updated_at"`        // Timestamp
+	ConnectionType   types.String `tfsdk:"connection_type"`   // OAUTH or SSH
+	PrivateKey       types.String `tfsdk:"private_key"`       // SSH private key (write-only)
+	Endpoint         types.String `tfsdk:"endpoint"`          // Base URL for self-hosted VCS
+	ApiUrl           types.String `tfsdk:"api_url"`           // API URL for self-hosted VCS
 }
 
 // VCSAPIResponse represents the JSON structure returned by the API
 type VCSAPIResponse struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	VcsType     string    `json:"vcsType"`
-	URL         string    `json:"endpoint"`
-	ClientId    string    `json:"clientId"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	VcsType        string    `json:"vcsType"`
+	URL            string    `json:"endpoint"`
+	ClientId       string    `json:"clientId"`
+	Description    string    `json:"description"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	ConnectionType string    `json:"connectionType"`
+	EndpointUrl    string    `json:"endpointUrl"`
+	ApiUrl         string    `json:"apiUrl"`
 }
 
 // VCSCreateRequest represents the JSON structure for creating a VCS
 type VCSCreateRequest struct {
-	Name         string `json:"name"`
-	VcsType      string `json:"vcsType"`
-	URL          string `json:"endpoint"`
-	ClientId     string `json:"clientId"`
-	ClientSecret string `json:"clientSecret"`
-	Description  string `json:"description,omitempty"`
+	Name           string `json:"name"`
+	VcsType        string `json:"vcsType"`
+	URL            string `json:"endpoint"`
+	ClientId       string `json:"clientId"`
+	ClientSecret   string `json:"clientSecret"`
+	Description    string `json:"description,omitempty"`
+	ConnectionType string `json:"connectionType,omitempty"`
+	PrivateKey     string `json:"privateKey,omitempty"`
+	EndpointUrl    string `json:"endpointUrl,omitempty"`
+	ApiUrl         string `json:"apiUrl,omitempty"`
 }
 
 // VCSUpdateRequest represents the JSON structure for updating a VCS
 type VCSUpdateRequest struct {
-	Name         string `json:"name,omitempty"`
-	VcsType      string `json:"vcsType,omitempty"`
-	URL          string `json:"endpoint,omitempty"`
-	ClientId     string `json:"clientId,omitempty"`
-	ClientSecret string `json:"clientSecret,omitempty"`
-	Description  string `json:"description,omitempty"`
+	Name           string `json:"name,omitempty"`
+	VcsType        string `json:"vcsType,omitempty"`
+	URL            string `json:"endpoint,omitempty"`
+	ClientId       string `json:"clientId,omitempty"`
+	ClientSecret   string `json:"clientSecret,omitempty"`
+	Description    string `json:"description,omitempty"`
+	ConnectionType string `json:"connectionType,omitempty"`
+	PrivateKey     string `json:"privateKey,omitempty"`
+	EndpointUrl    string `json:"endpointUrl,omitempty"`
+	ApiUrl         string `json:"apiUrl,omitempty"`
 }
 
 type VCSResource struct {
@@ -129,6 +146,30 @@ func (r *VCSResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Description: "The timestamp when the VCS was last updated.",
 				Computed:    true,
 			},
+			"connection_type": schema.StringAttribute{
+				Description: "Connection type for the VCS: OAUTH or SSH.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("OAUTH"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("OAUTH", "SSH"),
+				},
+			},
+			"private_key": schema.StringAttribute{
+				Description: "Private key for SSH-based VCS authentication.",
+				Optional:    true,
+				Sensitive:   true,
+			},
+			"endpoint": schema.StringAttribute{
+				Description: "Base URL for self-hosted VCS instances.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"api_url": schema.StringAttribute{
+				Description: "API URL for self-hosted VCS instances.",
+				Optional:    true,
+				Computed:    true,
+			},
 		},
 	}
 }
@@ -150,12 +191,22 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	createReq := VCSCreateRequest{
-		Name:         data.Name.ValueString(),
-		VcsType:      data.VcsType.ValueString(),
-		URL:          data.URL.ValueString(),
-		ClientId:     data.ClientId.ValueString(),
-		ClientSecret: data.ClientSecret.ValueString(),
-		Description:  data.Description.ValueString(),
+		Name:           data.Name.ValueString(),
+		VcsType:        data.VcsType.ValueString(),
+		URL:            data.URL.ValueString(),
+		ClientId:       data.ClientId.ValueString(),
+		ClientSecret:   data.ClientSecret.ValueString(),
+		Description:    data.Description.ValueString(),
+		ConnectionType: data.ConnectionType.ValueString(),
+	}
+	if !data.PrivateKey.IsNull() {
+		createReq.PrivateKey = data.PrivateKey.ValueString()
+	}
+	if !data.Endpoint.IsNull() {
+		createReq.EndpointUrl = data.Endpoint.ValueString()
+	}
+	if !data.ApiUrl.IsNull() {
+		createReq.ApiUrl = data.ApiUrl.ValueString()
 	}
 
 	reqBody, err := json.Marshal(createReq)
@@ -217,6 +268,10 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 	data.Description = types.StringValue(vcs.Description)
 	data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
+	data.ConnectionType = types.StringValue(vcs.ConnectionType)
+	// private_key is write-only, keep existing value in state
+	data.Endpoint = types.StringValue(vcs.EndpointUrl)
+	data.ApiUrl = types.StringValue(vcs.ApiUrl)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -284,6 +339,10 @@ func (r *VCSResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	data.Description = types.StringValue(vcs.Description)
 	data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
+	data.ConnectionType = types.StringValue(vcs.ConnectionType)
+	// private_key is write-only, keep existing value in state
+	data.Endpoint = types.StringValue(vcs.EndpointUrl)
+	data.ApiUrl = types.StringValue(vcs.ApiUrl)
 
 	// Save (possibly updated) state
 	diags = resp.State.Set(ctx, &data)
@@ -329,6 +388,22 @@ func (r *VCSResource) Update(ctx context.Context, req resource.UpdateRequest, re
 
 	if !plan.Description.Equal(state.Description) {
 		updateReq.Description = plan.Description.ValueString()
+	}
+
+	if !plan.ConnectionType.Equal(state.ConnectionType) {
+		updateReq.ConnectionType = plan.ConnectionType.ValueString()
+	}
+
+	if !plan.PrivateKey.Equal(state.PrivateKey) && !plan.PrivateKey.IsNull() {
+		updateReq.PrivateKey = plan.PrivateKey.ValueString()
+	}
+
+	if !plan.Endpoint.Equal(state.Endpoint) && !plan.Endpoint.IsNull() {
+		updateReq.EndpointUrl = plan.Endpoint.ValueString()
+	}
+
+	if !plan.ApiUrl.Equal(state.ApiUrl) && !plan.ApiUrl.IsNull() {
+		updateReq.ApiUrl = plan.ApiUrl.ValueString()
 	}
 
 	reqBody, err := json.Marshal(updateReq)
@@ -391,6 +466,10 @@ func (r *VCSResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	plan.Description = types.StringValue(vcs.Description)
 	plan.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	plan.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
+	plan.ConnectionType = types.StringValue(vcs.ConnectionType)
+	// private_key is write-only, keep value from plan
+	plan.Endpoint = types.StringValue(vcs.EndpointUrl)
+	plan.ApiUrl = types.StringValue(vcs.ApiUrl)
 
 	// Save updated info
 	diags = resp.State.Set(ctx, &plan)
@@ -531,6 +610,10 @@ func (r *VCSResource) ImportState(ctx context.Context, req resource.ImportStateR
 	data.Description = types.StringValue(vcs.Description)
 	data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
+	data.ConnectionType = types.StringValue(vcs.ConnectionType)
+	// private_key is write-only, not returned by API - will need to be set manually
+	data.Endpoint = types.StringValue(vcs.EndpointUrl)
+	data.ApiUrl = types.StringValue(vcs.ApiUrl)
 
 	// Set the state
 	diags := resp.State.Set(ctx, &data)
