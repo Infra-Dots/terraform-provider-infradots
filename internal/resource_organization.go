@@ -31,32 +31,34 @@ func NewOrganizationResource() resource.Resource {
 }
 
 type OrganizationResourceModel struct {
-	ID                    types.String `tfsdk:"id"`
-	Name                  types.String `tfsdk:"name"`
-	CreatedAt             types.String `tfsdk:"created_at"`
-	UpdatedAt             types.String `tfsdk:"updated_at"`
-	ExecutionMode         types.String `tfsdk:"execution_mode"` // execution mode (Remote, Local)
-	AgentsEnabled         types.Bool   `tfsdk:"agents_enabled"` // boolean indicating if IDP agents are enabled
-	Tags                  types.Map    `tfsdk:"tags"`
-	DriftDetectionEnabled types.Bool   `tfsdk:"drift_detection_enabled"`
-	RemedyDrift           types.Bool   `tfsdk:"remedy_drift"`
-	AutoImplementChanges  types.Bool   `tfsdk:"auto_implement_changes"`
+	ID                           types.String `tfsdk:"id"`
+	Name                         types.String `tfsdk:"name"`
+	CreatedAt                    types.String `tfsdk:"created_at"`
+	UpdatedAt                    types.String `tfsdk:"updated_at"`
+	ExecutionMode                types.String `tfsdk:"execution_mode"` // execution mode (Remote, Local)
+	AgentsEnabled                types.Bool   `tfsdk:"agents_enabled"` // boolean indicating if IDP agents are enabled
+	Tags                         types.Map    `tfsdk:"tags"`
+	DriftDetectionEnabled        types.Bool   `tfsdk:"drift_detection_enabled"`
+	RemedyDrift                  types.Bool   `tfsdk:"remedy_drift"`
+	AutoImplementChanges         types.Bool   `tfsdk:"auto_implement_changes"`
+	ApprovalReminderIntervalHours types.Int64  `tfsdk:"approval_reminder_interval_hours"`
 }
 
 type OrganizationAPIResponse struct {
-	ID                    string         `json:"id"`
-	Name                  string         `json:"name"`
-	Members               []Member       `json:"members"`
-	CreatedAt             time.Time      `json:"created_at"`
-	UpdatedAt             time.Time      `json:"updated_at"`
-	Subscription          map[string]any `json:"subscription"`
-	Tags                  map[string]any `json:"tags"`
-	Teams                 []Team         `json:"teams"`
-	ExecutionMode         string         `json:"execution_mode"`
-	AgentsEnabled         bool           `json:"agents_enabled"`
-	DriftDetectionEnabled bool           `json:"drift_detection_enabled"`
-	RemedyDrift           bool           `json:"remedy_drift"`
-	AutoImplementChanges  bool           `json:"auto_implement_changes"`
+	ID                           string         `json:"id"`
+	Name                         string         `json:"name"`
+	Members                      []Member       `json:"members"`
+	CreatedAt                    time.Time      `json:"created_at"`
+	UpdatedAt                    time.Time      `json:"updated_at"`
+	Subscription                 map[string]any `json:"subscription"`
+	Tags                         map[string]any `json:"tags"`
+	Teams                        []Team         `json:"teams"`
+	ExecutionMode                string         `json:"execution_mode"`
+	AgentsEnabled                bool           `json:"agents_enabled"`
+	DriftDetectionEnabled        bool           `json:"drift_detection_enabled"`
+	RemedyDrift                  bool           `json:"remedy_drift"`
+	AutoImplementChanges         bool           `json:"auto_implement_changes"`
+	ApprovalReminderIntervalHours *int64         `json:"approval_reminder_interval_hours"`
 }
 
 type Member struct {
@@ -68,13 +70,14 @@ type Team struct {
 }
 
 type OrganizationUpdateRequest struct {
-	Name                  string         `json:"name,omitempty"`
-	ExecutionMode         string         `json:"execution_mode,omitempty"`
-	AgentsEnabled         bool           `json:"agents_enabled,omitempty"`
-	Tags                  map[string]any `json:"tags,omitempty"`
-	DriftDetectionEnabled *bool          `json:"drift_detection_enabled,omitempty"`
-	RemedyDrift           *bool          `json:"remedy_drift,omitempty"`
-	AutoImplementChanges  *bool          `json:"auto_implement_changes,omitempty"`
+	Name                         string         `json:"name,omitempty"`
+	ExecutionMode                string         `json:"execution_mode,omitempty"`
+	AgentsEnabled                bool           `json:"agents_enabled,omitempty"`
+	Tags                         map[string]any `json:"tags,omitempty"`
+	DriftDetectionEnabled        *bool          `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift                  *bool          `json:"remedy_drift,omitempty"`
+	AutoImplementChanges         *bool          `json:"auto_implement_changes,omitempty"`
+	ApprovalReminderIntervalHours *int64         `json:"approval_reminder_interval_hours,omitempty"`
 }
 
 type OrganizationResource struct {
@@ -146,6 +149,10 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
+			"approval_reminder_interval_hours": schema.Int64Attribute{
+				Description: "How often (in hours) to send approval reminder notifications for jobs pending approval. Defaults to 1. Set to null to disable reminders.",
+				Optional:    true,
+			},
 		},
 	}
 }
@@ -177,6 +184,11 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 		DriftDetectionEnabled: &driftDetection,
 		RemedyDrift:           &remedyDrift,
 		AutoImplementChanges:  &autoImplement,
+	}
+
+	if !data.ApprovalReminderIntervalHours.IsNull() && !data.ApprovalReminderIntervalHours.IsUnknown() {
+		v := data.ApprovalReminderIntervalHours.ValueInt64()
+		createReq.ApprovalReminderIntervalHours = &v
 	}
 
 	if !data.Tags.IsNull() && !data.Tags.IsUnknown() {
@@ -245,6 +257,12 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+
+	if organization.ApprovalReminderIntervalHours != nil {
+		data.ApprovalReminderIntervalHours = types.Int64Value(*organization.ApprovalReminderIntervalHours)
+	} else {
+		data.ApprovalReminderIntervalHours = types.Int64Null()
+	}
 
 	if organization.Tags != nil {
 		tagMap := map[string]attr.Value{}
@@ -318,6 +336,12 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
 
+	if organization.ApprovalReminderIntervalHours != nil {
+		data.ApprovalReminderIntervalHours = types.Int64Value(*organization.ApprovalReminderIntervalHours)
+	} else {
+		data.ApprovalReminderIntervalHours = types.Int64Null()
+	}
+
 	if organization.Tags != nil {
 		tagMap := map[string]attr.Value{}
 		for k, v := range organization.Tags {
@@ -374,6 +398,13 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	if !plan.AutoImplementChanges.Equal(state.AutoImplementChanges) {
 		v := plan.AutoImplementChanges.ValueBool()
 		updateReq.AutoImplementChanges = &v
+	}
+
+	if !plan.ApprovalReminderIntervalHours.Equal(state.ApprovalReminderIntervalHours) {
+		if !plan.ApprovalReminderIntervalHours.IsNull() && !plan.ApprovalReminderIntervalHours.IsUnknown() {
+			v := plan.ApprovalReminderIntervalHours.ValueInt64()
+			updateReq.ApprovalReminderIntervalHours = &v
+		}
 	}
 
 	if !plan.Tags.Equal(state.Tags) && !plan.Tags.IsNull() && !plan.Tags.IsUnknown() {
@@ -443,6 +474,12 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	plan.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	plan.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	plan.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+
+	if organization.ApprovalReminderIntervalHours != nil {
+		plan.ApprovalReminderIntervalHours = types.Int64Value(*organization.ApprovalReminderIntervalHours)
+	} else {
+		plan.ApprovalReminderIntervalHours = types.Int64Null()
+	}
 
 	if organization.Tags != nil {
 		tagMap := map[string]attr.Value{}
@@ -559,6 +596,12 @@ func (r *OrganizationResource) ImportState(ctx context.Context, req resource.Imp
 	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+
+	if organization.ApprovalReminderIntervalHours != nil {
+		data.ApprovalReminderIntervalHours = types.Int64Value(*organization.ApprovalReminderIntervalHours)
+	} else {
+		data.ApprovalReminderIntervalHours = types.Int64Null()
+	}
 
 	if organization.Tags != nil {
 		tagMap := map[string]attr.Value{}

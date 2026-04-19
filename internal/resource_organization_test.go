@@ -40,7 +40,8 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"tags": {},
 			"teams": [{"name": "devops"}],
 			"execution_mode": "remote",
-			"agents_enabled": true
+			"agents_enabled": true,
+			"approval_reminder_interval_hours": 1
 		}`
 		resp.StatusCode = http.StatusCreated
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -59,7 +60,8 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"tags": {},
 			"teams": [{"name": "devops"}],
 			"execution_mode": "remote",
-			"agents_enabled": true
+			"agents_enabled": true,
+			"approval_reminder_interval_hours": 1
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
 		return resp, nil
@@ -77,7 +79,8 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"tags": {},
 			"teams": [{"name": "devops"}],
 			"execution_mode": "remote",
-			"agents_enabled": true
+			"agents_enabled": true,
+			"approval_reminder_interval_hours": 1
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
 		return resp, nil
@@ -95,7 +98,8 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"tags": {},
 			"teams": [{"name": "devops"}],
 			"execution_mode": "remote",
-			"agents_enabled": true
+			"agents_enabled": true,
+			"approval_reminder_interval_hours": 1
 		}]`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
 		return resp, nil
@@ -113,7 +117,8 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"tags": {},
 			"teams": [{"name": "devops"}],
 			"execution_mode": "Local",
-			"agents_enabled": false
+			"agents_enabled": false,
+			"approval_reminder_interval_hours": 8
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
 		return resp, nil
@@ -195,6 +200,7 @@ func TestOrganizationResource_Create(t *testing.T) {
 	assert.Equal(t, "test-org", state.Name.ValueString())
 	assert.Equal(t, "remote", state.ExecutionMode.ValueString())
 	assert.True(t, state.AgentsEnabled.ValueBool())
+	assert.Equal(t, int64(1), state.ApprovalReminderIntervalHours.ValueInt64())
 }
 
 func TestOrganizationResource_Read(t *testing.T) {
@@ -249,6 +255,7 @@ func TestOrganizationResource_Read(t *testing.T) {
 	assert.Equal(t, "2025-07-07T12:00:00Z", newState.UpdatedAt.ValueString())
 	assert.Equal(t, "remote", newState.ExecutionMode.ValueString())
 	assert.True(t, newState.AgentsEnabled.ValueBool())
+	assert.Equal(t, int64(1), newState.ApprovalReminderIntervalHours.ValueInt64())
 }
 
 func TestOrganizationResource_Update(t *testing.T) {
@@ -319,6 +326,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	assert.Equal(t, "Local", newState.ExecutionMode.ValueString())
 	assert.False(t, newState.AgentsEnabled.ValueBool())
 	assert.Equal(t, "2025-07-07T12:01:00Z", newState.UpdatedAt.ValueString())
+	assert.Equal(t, int64(8), newState.ApprovalReminderIntervalHours.ValueInt64())
 }
 
 func TestOrganizationResource_Delete(t *testing.T) {
@@ -390,6 +398,11 @@ func TestOrganizationResource_Schema(t *testing.T) {
 	agentsEnabledAttr := attrs["agents_enabled"].(schema.BoolAttribute)
 	assert.True(t, agentsEnabledAttr.Computed)
 	assert.True(t, agentsEnabledAttr.Optional)
+
+	assert.Contains(t, attrs, "approval_reminder_interval_hours")
+	approvalReminderAttr := attrs["approval_reminder_interval_hours"].(schema.Int64Attribute)
+	assert.True(t, approvalReminderAttr.Optional)
+	assert.False(t, approvalReminderAttr.Required)
 }
 
 func TestOrganizationResource_ImportState(t *testing.T) {
@@ -427,6 +440,7 @@ func TestOrganizationResource_ImportState(t *testing.T) {
 	assert.Equal(t, "test-org", state.Name.ValueString())
 	assert.Equal(t, "remote", state.ExecutionMode.ValueString())
 	assert.True(t, state.AgentsEnabled.ValueBool())
+	assert.Equal(t, int64(1), state.ApprovalReminderIntervalHours.ValueInt64())
 }
 
 func TestOrganizationResource_ImportState_NotFound(t *testing.T) {

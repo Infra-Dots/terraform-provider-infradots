@@ -210,6 +210,19 @@ data "infradots_workspace_schedule_data" "lookup_schedule" {
 }
 
 # ──────────────────────────────────────────────
+# Agent Skill
+# ──────────────────────────────────────────────
+
+resource "infradots_agent_skill" "test_skill" {
+  organization_name = var.organization_name
+  name              = "test-skill-${local.run_id}"
+  display_name      = "Test Skill"
+  description       = "Integration test skill"
+  enabled           = true
+  config            = jsonencode({ model = "claude-sonnet-4-6", temperature = 0.5 })
+}
+
+# ──────────────────────────────────────────────
 # Outputs
 # ──────────────────────────────────────────────
 
@@ -255,4 +268,12 @@ output "workspace_schedule_from_data" {
 
 output "variable_key_from_data" {
   value = data.infradots_variable_data.lookup_variable.key
+}
+
+output "agent_skill_id" {
+  value = infradots_agent_skill.test_skill.id
+}
+
+output "agent_skill_is_github_sourced" {
+  value = infradots_agent_skill.test_skill.is_github_sourced
 }

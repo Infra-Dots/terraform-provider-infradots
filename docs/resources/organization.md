@@ -19,6 +19,11 @@ The following arguments are supported:
 * `name` - (Required) The unique name of the organization.
 * `execution_mode` - (Optional) The execution mode for the organization (e.g., "Remote", "Local"). If not specified, defaults to the system default.
 * `agents_enabled` - (Optional) Whether agents are enabled for the organization. If not specified, defaults to the system default.
+* `drift_detection_enabled` - (Optional) Whether drift detection is enabled for the organization. Defaults to `false`.
+* `remedy_drift` - (Optional) Whether to automatically remedy detected drift. Defaults to `false`.
+* `auto_implement_changes` - (Optional) Whether to automatically implement AI-suggested changes. Defaults to `false`.
+* `approval_reminder_interval_hours` - (Optional) How often (in hours) to send approval reminder notifications for jobs pending approval. Defaults to `1`. Set to `null` to disable reminders. Reminders are only sent for workspaces that have at least one Slack or Teams integration attached.
+* `tags` - (Optional) A map of key-value tags to assign to the organization.
 
 ## Attributes Reference
 
