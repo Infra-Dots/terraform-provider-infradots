@@ -26,7 +26,7 @@ type ModelProviderDataSourceModel struct {
 	ID               types.String `tfsdk:"id"`
 	OrganizationName types.String `tfsdk:"organization_name"`
 	Name             types.String `tfsdk:"name"`
-	Provider         types.String `tfsdk:"provider"`
+	Provider         types.String `tfsdk:"provider_type"`
 	Description      types.String `tfsdk:"description"`
 	CreatedAt        types.String `tfsdk:"created_at"`
 	UpdatedAt        types.String `tfsdk:"updated_at"`
@@ -55,7 +55,7 @@ func (d *ModelProviderDataSource) Schema(_ context.Context, _ datasource.SchemaR
 				Optional:    true,
 				Computed:    true,
 			},
-			"provider": schema.StringAttribute{
+			"provider_type": schema.StringAttribute{
 				Description: "The provider type (e.g., openai, anthropic, google, azure_openai, cohere, llama).",
 				Computed:    true,
 			},

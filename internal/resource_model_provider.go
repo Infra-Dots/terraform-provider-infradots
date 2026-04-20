@@ -31,7 +31,7 @@ type ModelProviderResourceModel struct {
 	ID               types.String `tfsdk:"id"`
 	OrganizationName types.String `tfsdk:"organization_name"`
 	Name             types.String `tfsdk:"name"`
-	Provider         types.String `tfsdk:"provider"`
+	Provider         types.String `tfsdk:"provider_type"`
 	APIKey           types.String `tfsdk:"api_key"`
 	Description      types.String `tfsdk:"description"`
 	CreatedAt        types.String `tfsdk:"created_at"`
@@ -83,7 +83,7 @@ func (r *ModelProviderResource) Schema(_ context.Context, _ resource.SchemaReque
 				Description: "The name of the model provider.",
 				Required:    true,
 			},
-			"provider": schema.StringAttribute{
+			"provider_type": schema.StringAttribute{
 				Description: "The provider type. One of: openai, anthropic, google, azure_openai, cohere, llama.",
 				Required:    true,
 				Validators: []validator.String{
