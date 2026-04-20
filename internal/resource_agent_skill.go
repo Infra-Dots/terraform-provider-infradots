@@ -195,9 +195,9 @@ func agentSkillAPIToModel(data *AgentSkillResourceModel, skill AgentSkillAPIResp
 
 func (r *AgentSkillResource) skillURL(orgName, id string) string {
 	if id == "" {
-		return fmt.Sprintf("https://%s/api/organizations/%s/skills/", r.provider.host, orgName)
+		return fmt.Sprintf("https://%s/api/agents/%s/skills/", r.provider.host, orgName)
 	}
-	return fmt.Sprintf("https://%s/api/organizations/%s/skills/%s/", r.provider.host, orgName, id)
+	return fmt.Sprintf("https://%s/api/agents/%s/skills/%s/", r.provider.host, orgName, id)
 }
 
 func configToRawMessage(configStr string) (json.RawMessage, error) {
