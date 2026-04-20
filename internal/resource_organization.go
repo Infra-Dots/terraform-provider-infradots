@@ -31,33 +31,33 @@ func NewOrganizationResource() resource.Resource {
 }
 
 type OrganizationResourceModel struct {
-	ID                           types.String `tfsdk:"id"`
-	Name                         types.String `tfsdk:"name"`
-	CreatedAt                    types.String `tfsdk:"created_at"`
-	UpdatedAt                    types.String `tfsdk:"updated_at"`
-	ExecutionMode                types.String `tfsdk:"execution_mode"` // execution mode (Remote, Local)
-	AgentsEnabled                types.Bool   `tfsdk:"agents_enabled"` // boolean indicating if IDP agents are enabled
-	Tags                         types.Map    `tfsdk:"tags"`
-	DriftDetectionEnabled        types.Bool   `tfsdk:"drift_detection_enabled"`
-	RemedyDrift                  types.Bool   `tfsdk:"remedy_drift"`
-	AutoImplementChanges         types.Bool   `tfsdk:"auto_implement_changes"`
+	ID                            types.String `tfsdk:"id"`
+	Name                          types.String `tfsdk:"name"`
+	CreatedAt                     types.String `tfsdk:"created_at"`
+	UpdatedAt                     types.String `tfsdk:"updated_at"`
+	ExecutionMode                 types.String `tfsdk:"execution_mode"` // execution mode (Remote, Local)
+	AgentsEnabled                 types.Bool   `tfsdk:"agents_enabled"` // boolean indicating if IDP agents are enabled
+	Tags                          types.Map    `tfsdk:"tags"`
+	DriftDetectionEnabled         types.Bool   `tfsdk:"drift_detection_enabled"`
+	RemedyDrift                   types.Bool   `tfsdk:"remedy_drift"`
+	AutoImplementChanges          types.Bool   `tfsdk:"auto_implement_changes"`
 	ApprovalReminderIntervalHours types.Int64  `tfsdk:"approval_reminder_interval_hours"`
 }
 
 type OrganizationAPIResponse struct {
-	ID                           string         `json:"id"`
-	Name                         string         `json:"name"`
-	Members                      []Member       `json:"members"`
-	CreatedAt                    time.Time      `json:"created_at"`
-	UpdatedAt                    time.Time      `json:"updated_at"`
-	Subscription                 map[string]any `json:"subscription"`
-	Tags                         map[string]any `json:"tags"`
-	Teams                        []Team         `json:"teams"`
-	ExecutionMode                string         `json:"execution_mode"`
-	AgentsEnabled                bool           `json:"agents_enabled"`
-	DriftDetectionEnabled        bool           `json:"drift_detection_enabled"`
-	RemedyDrift                  bool           `json:"remedy_drift"`
-	AutoImplementChanges         bool           `json:"auto_implement_changes"`
+	ID                            string         `json:"id"`
+	Name                          string         `json:"name"`
+	Members                       []Member       `json:"members"`
+	CreatedAt                     time.Time      `json:"created_at"`
+	UpdatedAt                     time.Time      `json:"updated_at"`
+	Subscription                  map[string]any `json:"subscription"`
+	Tags                          map[string]any `json:"tags"`
+	Teams                         []Team         `json:"teams"`
+	ExecutionMode                 string         `json:"execution_mode"`
+	AgentsEnabled                 bool           `json:"agents_enabled"`
+	DriftDetectionEnabled         bool           `json:"drift_detection_enabled"`
+	RemedyDrift                   bool           `json:"remedy_drift"`
+	AutoImplementChanges          bool           `json:"auto_implement_changes"`
 	ApprovalReminderIntervalHours *int64         `json:"approval_reminder_interval_hours"`
 }
 
@@ -70,13 +70,13 @@ type Team struct {
 }
 
 type OrganizationUpdateRequest struct {
-	Name                         string         `json:"name,omitempty"`
-	ExecutionMode                string         `json:"execution_mode,omitempty"`
-	AgentsEnabled                bool           `json:"agents_enabled,omitempty"`
-	Tags                         map[string]any `json:"tags,omitempty"`
-	DriftDetectionEnabled        *bool          `json:"drift_detection_enabled,omitempty"`
-	RemedyDrift                  *bool          `json:"remedy_drift,omitempty"`
-	AutoImplementChanges         *bool          `json:"auto_implement_changes,omitempty"`
+	Name                          string         `json:"name,omitempty"`
+	ExecutionMode                 string         `json:"execution_mode,omitempty"`
+	AgentsEnabled                 bool           `json:"agents_enabled,omitempty"`
+	Tags                          map[string]any `json:"tags,omitempty"`
+	DriftDetectionEnabled         *bool          `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift                   *bool          `json:"remedy_drift,omitempty"`
+	AutoImplementChanges          *bool          `json:"auto_implement_changes,omitempty"`
 	ApprovalReminderIntervalHours *int64         `json:"approval_reminder_interval_hours,omitempty"`
 }
 
