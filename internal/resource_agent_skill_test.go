@@ -29,7 +29,7 @@ func (m *MockAgentSkillRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	url := req.URL.String()
 
 	// Handle Create (POST to /api/organizations/{org}/skills/)
-	if req.Method == http.MethodPost && strings.Contains(url, "/api/organizations/test-org/skills/") {
+	if req.Method == http.MethodPost && strings.Contains(url, "/api/agents/test-org/skills/") {
 		jsonResp := `{
 			"id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			"name": "review",
@@ -50,7 +50,7 @@ func (m *MockAgentSkillRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	}
 
 	// Handle Read (GET to /api/organizations/{org}/skills/{id})
-	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/skills/a1b2c3d4-e5f6-7890-abcd-ef1234567890") {
+	if req.Method == http.MethodGet && strings.Contains(url, "/api/agents/test-org/skills/a1b2c3d4-e5f6-7890-abcd-ef1234567890") {
 		jsonResp := `{
 			"id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			"name": "review",
@@ -70,7 +70,7 @@ func (m *MockAgentSkillRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	}
 
 	// Handle Update (PATCH to /api/organizations/{org}/skills/{id})
-	if req.Method == http.MethodPatch && strings.Contains(url, "/api/organizations/test-org/skills/a1b2c3d4-e5f6-7890-abcd-ef1234567890") {
+	if req.Method == http.MethodPatch && strings.Contains(url, "/api/agents/test-org/skills/a1b2c3d4-e5f6-7890-abcd-ef1234567890") {
 		jsonResp := `{
 			"id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			"name": "review",
@@ -90,7 +90,7 @@ func (m *MockAgentSkillRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	}
 
 	// Handle Delete (DELETE to /api/organizations/{org}/skills/{id})
-	if req.Method == http.MethodDelete && strings.Contains(url, "/api/organizations/test-org/skills/a1b2c3d4-e5f6-7890-abcd-ef1234567890") {
+	if req.Method == http.MethodDelete && strings.Contains(url, "/api/agents/test-org/skills/a1b2c3d4-e5f6-7890-abcd-ef1234567890") {
 		resp.StatusCode = http.StatusNoContent
 		resp.Body = io.NopCloser(strings.NewReader(""))
 		return resp, nil
