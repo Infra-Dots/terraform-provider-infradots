@@ -217,14 +217,67 @@ func (r *WorkspaceIntegrationResource) Create(ctx context.Context, req resource.
 		return
 	}
 
+	// The attach endpoint may return an empty body on success; fall back to a GET.
 	var wi WorkspaceIntegrationAPIResponse
-	err = json.Unmarshal(respBody, &wi)
-	if err != nil {
-		resp.Diagnostics.AddError("Error parsing response", err.Error())
-		return
-	}
+	if len(respBody) > 0 {
+		err = json.Unmarshal(respBody, &wi)
+		if err != nil {
+			resp.Diagnostics.AddError("Error parsing response", err.Error())
+			return
+		}
+		mapWorkspaceIntegrationToModel(ctx, &data, wi)
+	} else {
+		listURL := fmt.Sprintf("https://%s/api/organizations/%s/workspaces/%s/integrations/",
+			r.provider.host,
+			data.OrganizationName.ValueString(),
+			data.WorkspaceName.ValueString())
 
-	mapWorkspaceIntegrationToModel(ctx, &data, wi)
+		listReq, err := http.NewRequest(http.MethodGet, listURL, nil)
+		if err != nil {
+			resp.Diagnostics.AddError("Error creating request", err.Error())
+			return
+		}
+		listReq.Header.Set("Authorization", "Bearer "+r.provider.token)
+
+		listResp, err := r.provider.client.Do(listReq)
+		if err != nil {
+			resp.Diagnostics.AddError("HTTP request failed", err.Error())
+			return
+		}
+		defer listResp.Body.Close()
+
+		listBody, err := io.ReadAll(listResp.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading response body", err.Error())
+			return
+		}
+
+		if listResp.StatusCode != 200 {
+			resp.Diagnostics.AddError("Failed to read integration after attach",
+				fmt.Sprintf("Status: %d, Body: %s", listResp.StatusCode, string(listBody)))
+			return
+		}
+
+		var integrations []WorkspaceIntegrationAPIResponse
+		if err = json.Unmarshal(listBody, &integrations); err != nil {
+			resp.Diagnostics.AddError("Error parsing integrations list", err.Error())
+			return
+		}
+
+		found := false
+		for _, item := range integrations {
+			if item.IntegrationID == data.IntegrationID.ValueString() {
+				mapWorkspaceIntegrationToModel(ctx, &data, item)
+				found = true
+				break
+			}
+		}
+		if !found {
+			resp.Diagnostics.AddError("Integration not found after attach",
+				fmt.Sprintf("Integration %s not found in workspace %s", data.IntegrationID.ValueString(), data.WorkspaceName.ValueString()))
+			return
+		}
+	}
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)

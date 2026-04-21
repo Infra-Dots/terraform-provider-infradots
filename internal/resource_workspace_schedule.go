@@ -225,7 +225,10 @@ func (r *WorkspaceScheduleResource) Read(ctx context.Context, req resource.ReadR
 
 	data.ID = types.StringValue(schedule.ID)
 	data.Type = types.StringValue(schedule.Type)
-	data.Crontab = types.StringValue(schedule.Crontab)
+	// crontab may not be returned by GET; preserve existing state value
+	if schedule.Crontab != "" {
+		data.Crontab = types.StringValue(schedule.Crontab)
+	}
 	data.Schedule = types.StringValue(schedule.Schedule)
 
 	diags = resp.State.Set(ctx, &data)

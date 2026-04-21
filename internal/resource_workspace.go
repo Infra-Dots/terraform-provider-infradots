@@ -246,6 +246,7 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"auto_implement_changes": schema.BoolAttribute{
 				Description: "Whether to auto-implement changes. If null, inherits from the organization.",
 				Optional:    true,
+				Computed:    true,
 			},
 			"ssh_id": schema.StringAttribute{
 				Description: "ID of the SSH key to use for the workspace.",

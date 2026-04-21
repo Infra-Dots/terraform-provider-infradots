@@ -339,7 +339,10 @@ func (r *VCSResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	data.Description = types.StringValue(vcs.Description)
 	data.CreatedAt = types.StringValue(vcs.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(vcs.UpdatedAt.Format(time.RFC3339))
-	data.ConnectionType = types.StringValue(vcs.ConnectionType)
+	// connection_type may not be returned by GET; preserve existing state value
+	if vcs.ConnectionType != "" {
+		data.ConnectionType = types.StringValue(vcs.ConnectionType)
+	}
 	// private_key is write-only, keep existing value in state
 	data.Endpoint = types.StringValue(vcs.EndpointUrl)
 	data.ApiUrl = types.StringValue(vcs.ApiUrl)
