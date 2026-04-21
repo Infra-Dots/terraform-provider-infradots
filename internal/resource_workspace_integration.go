@@ -39,12 +39,17 @@ type WorkspaceIntegrationResourceModel struct {
 	SlackEnvChannels types.Map    `tfsdk:"slack_env_channels"`
 }
 
+type WorkspaceIntegrationRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type WorkspaceIntegrationAPIResponse struct {
-	ID               string            `json:"id"`
-	IntegrationID    string            `json:"integration_id"`
-	RunAfterStage    string            `json:"run_after_stage"`
-	SlackChannels    []string          `json:"slack_channels"`
-	SlackEnvChannels map[string]string `json:"slack_env_channels"`
+	ID               string                 `json:"id"`
+	Integration      WorkspaceIntegrationRef `json:"integration"`
+	RunAfterStage    string                 `json:"run_after_stage"`
+	SlackChannels    []string               `json:"slack_channels"`
+	SlackEnvChannels map[string]string      `json:"slack_env_channels"`
 }
 
 type WorkspaceIntegrationCreateRequest struct {
@@ -119,7 +124,7 @@ func (r *WorkspaceIntegrationResource) Configure(_ context.Context, req resource
 
 func mapWorkspaceIntegrationToModel(_ context.Context, data *WorkspaceIntegrationResourceModel, wi WorkspaceIntegrationAPIResponse) {
 	data.ID = types.StringValue(wi.ID)
-	data.IntegrationID = types.StringValue(wi.IntegrationID)
+	data.IntegrationID = types.StringValue(wi.Integration.ID)
 	data.RunAfterStage = types.StringValue(wi.RunAfterStage)
 
 	channels := wi.SlackChannels
@@ -266,7 +271,7 @@ func (r *WorkspaceIntegrationResource) Create(ctx context.Context, req resource.
 
 		found := false
 		for _, item := range integrations {
-			if item.IntegrationID == data.IntegrationID.ValueString() {
+			if item.Integration.ID == data.IntegrationID.ValueString() {
 				mapWorkspaceIntegrationToModel(ctx, &data, item)
 				found = true
 				break
@@ -335,7 +340,7 @@ func (r *WorkspaceIntegrationResource) Read(ctx context.Context, req resource.Re
 
 	found := false
 	for _, wi := range integrations {
-		if wi.IntegrationID == data.IntegrationID.ValueString() {
+		if wi.Integration.ID == data.IntegrationID.ValueString() {
 			mapWorkspaceIntegrationToModel(ctx, &data, wi)
 			found = true
 			break
@@ -463,7 +468,7 @@ func (r *WorkspaceIntegrationResource) ImportState(ctx context.Context, req reso
 
 	found := false
 	for _, wi := range integrations {
-		if wi.IntegrationID == integrationID {
+		if wi.Integration.ID == integrationID {
 			mapWorkspaceIntegrationToModel(ctx, &data, wi)
 			found = true
 			break

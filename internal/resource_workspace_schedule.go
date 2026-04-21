@@ -165,7 +165,10 @@ func (r *WorkspaceScheduleResource) Create(ctx context.Context, req resource.Cre
 
 	data.ID = types.StringValue(schedule.ID)
 	data.Type = types.StringValue(schedule.Type)
-	data.Crontab = types.StringValue(schedule.Crontab)
+	// crontab may not be returned by the API; preserve plan value if empty
+	if schedule.Crontab != "" {
+		data.Crontab = types.StringValue(schedule.Crontab)
+	}
 	data.Schedule = types.StringValue(schedule.Schedule)
 
 	diags = resp.State.Set(ctx, &data)
