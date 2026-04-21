@@ -45,11 +45,11 @@ type WorkspaceIntegrationRef struct {
 }
 
 type WorkspaceIntegrationAPIResponse struct {
-	ID               string                 `json:"id"`
+	ID               string                  `json:"id"`
 	Integration      WorkspaceIntegrationRef `json:"integration"`
-	RunAfterStage    string                 `json:"run_after_stage"`
-	SlackChannels    []string               `json:"slack_channels"`
-	SlackEnvChannels map[string]string      `json:"slack_env_channels"`
+	RunAfterStage    string                  `json:"run_after_stage"`
+	SlackChannels    []string                `json:"slack_channels"`
+	SlackEnvChannels map[string]string       `json:"slack_env_channels"`
 }
 
 type WorkspaceIntegrationCreateRequest struct {
