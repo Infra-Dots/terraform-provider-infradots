@@ -41,6 +41,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"teams": [{"name": "devops"}],
 			"execution_mode": "remote",
 			"agents_enabled": true,
+			"workspace_interconnections_enabled": false,
 			"approval_reminder_interval_hours": 1
 		}`
 		resp.StatusCode = http.StatusCreated
@@ -61,6 +62,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"teams": [{"name": "devops"}],
 			"execution_mode": "remote",
 			"agents_enabled": true,
+			"workspace_interconnections_enabled": true,
 			"approval_reminder_interval_hours": 1
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -80,6 +82,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"teams": [{"name": "devops"}],
 			"execution_mode": "remote",
 			"agents_enabled": true,
+			"workspace_interconnections_enabled": false,
 			"approval_reminder_interval_hours": 1
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -118,6 +121,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"teams": [{"name": "devops"}],
 			"execution_mode": "Local",
 			"agents_enabled": false,
+			"workspace_interconnections_enabled": true,
 			"approval_reminder_interval_hours": 8
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -200,6 +204,7 @@ func TestOrganizationResource_Create(t *testing.T) {
 	assert.Equal(t, "test-org", state.Name.ValueString())
 	assert.Equal(t, "remote", state.ExecutionMode.ValueString())
 	assert.True(t, state.AgentsEnabled.ValueBool())
+	assert.False(t, state.WorkspaceInterconnectionsEnabled.ValueBool())
 	assert.Equal(t, int64(1), state.ApprovalReminderIntervalHours.ValueInt64())
 }
 
@@ -255,6 +260,7 @@ func TestOrganizationResource_Read(t *testing.T) {
 	assert.Equal(t, "2025-07-07T12:00:00Z", newState.UpdatedAt.ValueString())
 	assert.Equal(t, "remote", newState.ExecutionMode.ValueString())
 	assert.True(t, newState.AgentsEnabled.ValueBool())
+	assert.True(t, newState.WorkspaceInterconnectionsEnabled.ValueBool())
 	assert.Equal(t, int64(1), newState.ApprovalReminderIntervalHours.ValueInt64())
 }
 
@@ -270,6 +276,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	state.Name = types.StringValue("test-org")
 	state.ExecutionMode = types.StringValue("remote")
 	state.AgentsEnabled = types.BoolValue(true)
+	state.WorkspaceInterconnectionsEnabled = types.BoolValue(false)
 	state.Tags = types.MapNull(types.StringType)
 
 	// Setup planned new state
@@ -278,6 +285,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	plan.Name = types.StringValue("updated-org")
 	plan.ExecutionMode = types.StringValue("Local")
 	plan.AgentsEnabled = types.BoolValue(false)
+	plan.WorkspaceInterconnectionsEnabled = types.BoolValue(true)
 	plan.Tags = types.MapNull(types.StringType)
 
 	// Create request/response objects
@@ -325,6 +333,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	assert.Equal(t, "updated-org", newState.Name.ValueString())
 	assert.Equal(t, "Local", newState.ExecutionMode.ValueString())
 	assert.False(t, newState.AgentsEnabled.ValueBool())
+	assert.True(t, newState.WorkspaceInterconnectionsEnabled.ValueBool())
 	assert.Equal(t, "2025-07-07T12:01:00Z", newState.UpdatedAt.ValueString())
 	assert.Equal(t, int64(8), newState.ApprovalReminderIntervalHours.ValueInt64())
 }
@@ -403,6 +412,11 @@ func TestOrganizationResource_Schema(t *testing.T) {
 	approvalReminderAttr := attrs["approval_reminder_interval_hours"].(schema.Int64Attribute)
 	assert.True(t, approvalReminderAttr.Optional)
 	assert.False(t, approvalReminderAttr.Required)
+
+	assert.Contains(t, attrs, "workspace_interconnections_enabled")
+	workspaceInterconnAttr := attrs["workspace_interconnections_enabled"].(schema.BoolAttribute)
+	assert.True(t, workspaceInterconnAttr.Optional)
+	assert.True(t, workspaceInterconnAttr.Computed)
 }
 
 func TestOrganizationResource_ImportState(t *testing.T) {
@@ -440,6 +454,7 @@ func TestOrganizationResource_ImportState(t *testing.T) {
 	assert.Equal(t, "test-org", state.Name.ValueString())
 	assert.Equal(t, "remote", state.ExecutionMode.ValueString())
 	assert.True(t, state.AgentsEnabled.ValueBool())
+	assert.False(t, state.WorkspaceInterconnectionsEnabled.ValueBool())
 	assert.Equal(t, int64(1), state.ApprovalReminderIntervalHours.ValueInt64())
 }
 

@@ -42,6 +42,7 @@ type OrganizationResourceModel struct {
 	RemedyDrift                   types.Bool   `tfsdk:"remedy_drift"`
 	AutoImplementChanges          types.Bool   `tfsdk:"auto_implement_changes"`
 	ApprovalReminderIntervalHours types.Int64  `tfsdk:"approval_reminder_interval_hours"`
+	WorkspaceInterconnectionsEnabled types.Bool `tfsdk:"workspace_interconnections_enabled"`
 }
 
 type OrganizationAPIResponse struct {
@@ -59,6 +60,7 @@ type OrganizationAPIResponse struct {
 	RemedyDrift                   bool           `json:"remedy_drift"`
 	AutoImplementChanges          bool           `json:"auto_implement_changes"`
 	ApprovalReminderIntervalHours *int64         `json:"approval_reminder_interval_hours"`
+	WorkspaceInterconnectionsEnabled bool         `json:"workspace_interconnections_enabled"`
 }
 
 type Member struct {
@@ -78,6 +80,7 @@ type OrganizationUpdateRequest struct {
 	RemedyDrift                   *bool          `json:"remedy_drift,omitempty"`
 	AutoImplementChanges          *bool          `json:"auto_implement_changes,omitempty"`
 	ApprovalReminderIntervalHours *int64         `json:"approval_reminder_interval_hours,omitempty"`
+	WorkspaceInterconnectionsEnabled *bool       `json:"workspace_interconnections_enabled,omitempty"`
 }
 
 type OrganizationResource struct {
@@ -149,6 +152,12 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
+			"workspace_interconnections_enabled": schema.BoolAttribute{
+				Description: "Auto-discover workspace dependencies from terraform_remote_state data sources on state upload.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
 			"approval_reminder_interval_hours": schema.Int64Attribute{
 				Description: "How often (in hours) to send approval reminder notifications for jobs pending approval. Defaults to 1. Set to null to disable reminders.",
 				Optional:    true,
@@ -176,6 +185,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	driftDetection := data.DriftDetectionEnabled.ValueBool()
 	remedyDrift := data.RemedyDrift.ValueBool()
 	autoImplement := data.AutoImplementChanges.ValueBool()
+	workspaceInterconnections := data.WorkspaceInterconnectionsEnabled.ValueBool()
 
 	createReq := OrganizationUpdateRequest{
 		Name:                  data.Name.ValueString(),
@@ -184,6 +194,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 		DriftDetectionEnabled: &driftDetection,
 		RemedyDrift:           &remedyDrift,
 		AutoImplementChanges:  &autoImplement,
+		WorkspaceInterconnectionsEnabled: &workspaceInterconnections,
 	}
 
 	if !data.ApprovalReminderIntervalHours.IsNull() && !data.ApprovalReminderIntervalHours.IsUnknown() {
@@ -257,6 +268,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+	data.WorkspaceInterconnectionsEnabled = types.BoolValue(organization.WorkspaceInterconnectionsEnabled)
 
 	if organization.ApprovalReminderIntervalHours != nil {
 		data.ApprovalReminderIntervalHours = types.Int64Value(*organization.ApprovalReminderIntervalHours)
@@ -335,6 +347,7 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+	data.WorkspaceInterconnectionsEnabled = types.BoolValue(organization.WorkspaceInterconnectionsEnabled)
 
 	if organization.ApprovalReminderIntervalHours != nil {
 		data.ApprovalReminderIntervalHours = types.Int64Value(*organization.ApprovalReminderIntervalHours)
@@ -398,6 +411,11 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	if !plan.AutoImplementChanges.Equal(state.AutoImplementChanges) {
 		v := plan.AutoImplementChanges.ValueBool()
 		updateReq.AutoImplementChanges = &v
+	}
+
+	if !plan.WorkspaceInterconnectionsEnabled.Equal(state.WorkspaceInterconnectionsEnabled) {
+		v := plan.WorkspaceInterconnectionsEnabled.ValueBool()
+		updateReq.WorkspaceInterconnectionsEnabled = &v
 	}
 
 	if !plan.ApprovalReminderIntervalHours.Equal(state.ApprovalReminderIntervalHours) {
@@ -474,6 +492,7 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	plan.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	plan.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	plan.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+	plan.WorkspaceInterconnectionsEnabled = types.BoolValue(organization.WorkspaceInterconnectionsEnabled)
 
 	if organization.ApprovalReminderIntervalHours != nil {
 		plan.ApprovalReminderIntervalHours = types.Int64Value(*organization.ApprovalReminderIntervalHours)
@@ -596,6 +615,7 @@ func (r *OrganizationResource) ImportState(ctx context.Context, req resource.Imp
 	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+	data.WorkspaceInterconnectionsEnabled = types.BoolValue(organization.WorkspaceInterconnectionsEnabled)
 
 	if organization.ApprovalReminderIntervalHours != nil {
 		data.ApprovalReminderIntervalHours = types.Int64Value(*organization.ApprovalReminderIntervalHours)
