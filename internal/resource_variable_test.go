@@ -30,6 +30,25 @@ func (m *MockVariableRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 	// Check the URL and method to determine response
 	url := req.URL.String()
 
+	// Handle workspace-scoped Create (POST to /api/organizations/{org}/workspaces/{ws}/variables/)
+	if req.Method == http.MethodPost && strings.Contains(url, "/api/organizations/test-org/workspaces/test-workspace/variables/") {
+		jsonResp := `{
+			"id": "5f550f5e-0bf3-6543-defg-g1156789012c",
+			"key": "workspace-variable",
+			"value": "workspace-value",
+			"description": "Test workspace variable",
+			"category": "env",
+			"sensitive": true,
+			"hcl": false,
+			"created_at": "2025-07-07T12:00:00Z",
+			"updated_at": "2025-07-07T12:00:00Z",
+			"workspace": "test-workspace"
+		}`
+		resp.StatusCode = http.StatusCreated
+		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
+		return resp, nil
+	}
+
 	// Handle Create (POST to /api/organizations/{org_name}/variables/)
 	if req.Method == http.MethodPost && strings.Contains(url, "/api/organizations/test-org/variables/") {
 		jsonResp := `{
@@ -215,6 +234,53 @@ func TestVariableResource_Create(t *testing.T) {
 	assert.False(t, state.HCL.ValueBool())
 	assert.Equal(t, "2025-07-07T12:00:00Z", state.CreatedAt.ValueString())
 	assert.Equal(t, "2025-07-07T12:00:00Z", state.UpdatedAt.ValueString())
+}
+
+func TestVariableResource_Create_WorkspaceScoped(t *testing.T) {
+	r := setupTestVariableResource(t)
+	ctx := context.Background()
+
+	var plan VariableResourceModel
+	plan.OrganizationName = types.StringValue("test-org")
+	plan.Key = types.StringValue("workspace-variable")
+	plan.Value = types.StringValue("workspace-value")
+	plan.Description = types.StringValue("Test workspace variable")
+	plan.Category = types.StringValue("env")
+	plan.Sensitive = types.BoolValue(true)
+	plan.HCL = types.BoolValue(false)
+	plan.Workspace = types.StringValue("test-workspace")
+
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	request := resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema},
+	}
+	diags := request.Plan.Set(ctx, &plan)
+	require.Empty(t, diags)
+
+	response := resource.CreateResponse{
+		State: tfsdk.State{Schema: request.Plan.Schema},
+	}
+
+	r.Create(ctx, request, &response)
+
+	if response.Diagnostics.HasError() {
+		for _, diag := range response.Diagnostics.Errors() {
+			t.Logf("Error: %s - %s", diag.Summary(), diag.Detail())
+		}
+	}
+	require.False(t, response.Diagnostics.HasError())
+
+	var state VariableResourceModel
+	diags = response.State.Get(ctx, &state)
+	require.Empty(t, diags)
+
+	// The variable is created via the workspace-scoped endpoint and the workspace
+	// attribute reflects the configured workspace name (not left unknown/empty).
+	assert.Equal(t, "5f550f5e-0bf3-6543-defg-g1156789012c", state.ID.ValueString())
+	assert.Equal(t, "workspace-variable", state.Key.ValueString())
+	assert.Equal(t, "test-workspace", state.Workspace.ValueString())
 }
 
 func TestVariableResource_Read(t *testing.T) {

@@ -179,10 +179,19 @@ func (r *VariableResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	// POST to /api/organizations/{organization_name}/variables/
-	url := fmt.Sprintf("https://%s/api/organizations/%s/variables/",
-		r.provider.host,
-		data.OrganizationName.ValueString())
+	// POST to the workspace-scoped endpoint when a workspace is set, otherwise to
+	// the organization-level endpoint. A null/unknown workspace yields "" here.
+	var url string
+	if data.Workspace.ValueString() != "" {
+		url = fmt.Sprintf("https://%s/api/organizations/%s/workspaces/%s/variables/",
+			r.provider.host,
+			data.OrganizationName.ValueString(),
+			data.Workspace.ValueString())
+	} else {
+		url = fmt.Sprintf("https://%s/api/organizations/%s/variables/",
+			r.provider.host,
+			data.OrganizationName.ValueString())
+	}
 
 	reqHttp, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(reqBody)))
 	if err != nil {
@@ -232,6 +241,17 @@ func (r *VariableResource) Create(ctx context.Context, req resource.CreateReques
 	data.HCL = types.BoolValue(variable.HCL)
 	data.CreatedAt = types.StringValue(variable.CreatedAt.Format(time.RFC3339))
 	data.UpdatedAt = types.StringValue(variable.UpdatedAt.Format(time.RFC3339))
+
+	// Resolve the workspace attribute (Optional + Computed). Keep the configured
+	// value when the user set one; otherwise reflect what the API returned so the
+	// value is never left unknown in state.
+	if data.Workspace.ValueString() == "" {
+		if variable.Workspace != "" {
+			data.Workspace = types.StringValue(variable.Workspace)
+		} else {
+			data.Workspace = types.StringNull()
+		}
+	}
 
 	// Save data back into Terraform state
 	diags = resp.State.Set(ctx, &data)

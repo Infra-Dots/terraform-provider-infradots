@@ -53,6 +53,16 @@ type WorkspaceScheduleUpdateRequest struct {
 	Crontab string `json:"crontab,omitempty"`
 }
 
+// normalizeCrontab strips the human-readable annotation the API appends to a
+// crontab value (e.g. "0 9 * * 1 (m/h/dM/MY/d) UTC") so the stored value matches
+// the plain cron expression the user configured.
+func normalizeCrontab(s string) string {
+	if idx := strings.Index(s, " ("); idx != -1 {
+		s = s[:idx]
+	}
+	return strings.TrimSpace(s)
+}
+
 func (r *WorkspaceScheduleResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = "infradots_workspace_schedule"
 }
@@ -165,10 +175,10 @@ func (r *WorkspaceScheduleResource) Create(ctx context.Context, req resource.Cre
 
 	data.ID = types.StringValue(schedule.ID)
 	data.Type = types.StringValue(schedule.Type)
-	// crontab may not be returned by the API; preserve plan value if empty
-	if schedule.Crontab != "" {
-		data.Crontab = types.StringValue(schedule.Crontab)
-	}
+	// Keep the user's configured crontab. The API echoes it back with a
+	// human-readable annotation (e.g. "0 9 * * 1 (m/h/dM/MY/d) UTC"); overwriting
+	// the Required crontab attribute with that value would violate Terraform's
+	// post-apply consistency check.
 	data.Schedule = types.StringValue(schedule.Schedule)
 
 	diags = resp.State.Set(ctx, &data)
@@ -228,9 +238,11 @@ func (r *WorkspaceScheduleResource) Read(ctx context.Context, req resource.ReadR
 
 	data.ID = types.StringValue(schedule.ID)
 	data.Type = types.StringValue(schedule.Type)
-	// crontab may not be returned by GET; preserve existing state value
+	// The API returns crontab with a human-readable annotation; strip it so drift
+	// is compared against the user's plain cron expression rather than always
+	// showing a difference. If GET omits crontab, keep the existing state value.
 	if schedule.Crontab != "" {
-		data.Crontab = types.StringValue(schedule.Crontab)
+		data.Crontab = types.StringValue(normalizeCrontab(schedule.Crontab))
 	}
 	data.Schedule = types.StringValue(schedule.Schedule)
 
@@ -312,7 +324,8 @@ func (r *WorkspaceScheduleResource) Update(ctx context.Context, req resource.Upd
 
 	plan.ID = types.StringValue(schedule.ID)
 	plan.Type = types.StringValue(schedule.Type)
-	plan.Crontab = types.StringValue(schedule.Crontab)
+	// Keep the configured crontab; the API annotates the returned value, which
+	// would otherwise break post-apply consistency for this Required attribute.
 	plan.Schedule = types.StringValue(schedule.Schedule)
 
 	diags = resp.State.Set(ctx, &plan)
@@ -426,7 +439,7 @@ func (r *WorkspaceScheduleResource) ImportState(ctx context.Context, req resourc
 	data.WorkspaceName = types.StringValue(workspaceName)
 	data.ID = types.StringValue(schedule.ID)
 	data.Type = types.StringValue(schedule.Type)
-	data.Crontab = types.StringValue(schedule.Crontab)
+	data.Crontab = types.StringValue(normalizeCrontab(schedule.Crontab))
 	data.Schedule = types.StringValue(schedule.Schedule)
 
 	diags := resp.State.Set(ctx, &data)
