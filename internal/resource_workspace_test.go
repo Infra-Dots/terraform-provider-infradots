@@ -232,6 +232,7 @@ func TestWorkspaceResource_Create(t *testing.T) {
 	plan.ExecutionMode = types.StringValue("Remote")
 	plan.AgentsEnabled = types.BoolValue(false)
 	plan.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	plan.TflintPlugins = types.ListNull(types.StringType)
 	plan.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -307,6 +308,7 @@ func TestWorkspaceResource_Read(t *testing.T) {
 	state.ExecutionMode = types.StringValue("Remote")
 	state.AgentsEnabled = types.BoolValue(false)
 	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	state.TflintPlugins = types.ListNull(types.StringType)
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -381,6 +383,7 @@ func TestWorkspaceResource_Update(t *testing.T) {
 	state.ExecutionMode = types.StringValue("Remote")
 	state.AgentsEnabled = types.BoolValue(false)
 	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	state.TflintPlugins = types.ListNull(types.StringType)
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -407,6 +410,7 @@ func TestWorkspaceResource_Update(t *testing.T) {
 	plan.ExecutionMode = types.StringValue("Remote")
 	plan.AgentsEnabled = types.BoolValue(false)
 	plan.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	plan.TflintPlugins = types.ListNull(types.StringType)
 	plan.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -488,6 +492,7 @@ func TestWorkspaceResource_Delete(t *testing.T) {
 	state.ExecutionMode = types.StringValue("Remote")
 	state.AgentsEnabled = types.BoolValue(false)
 	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	state.TflintPlugins = types.ListNull(types.StringType)
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,

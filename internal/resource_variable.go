@@ -139,7 +139,7 @@ func (r *VariableResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:    true,
 			},
 			"workspace": schema.StringAttribute{
-				Description: "Workspace of the variable",
+				Description: "The name of the workspace this variable is scoped to (the workspace name, not its ID). When omitted, the variable is organization-level.",
 				Optional:    true,
 				Computed:    true,
 			},

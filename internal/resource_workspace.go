@@ -50,6 +50,9 @@ type WorkspaceResourceModel struct {
 	DriftDetectionEnabled types.Bool   `tfsdk:"drift_detection_enabled"`
 	RemedyDrift           types.Bool   `tfsdk:"remedy_drift"`
 	AutoImplementChanges  types.Bool   `tfsdk:"auto_implement_changes"`
+	ValidateMode          types.String `tfsdk:"validate_mode"`
+	TflintMode            types.String `tfsdk:"tflint_mode"`
+	TflintPlugins         types.List   `tfsdk:"tflint_plugins"`
 	SshId                 types.String `tfsdk:"ssh_id"`
 	ModuleSshKey          types.String `tfsdk:"module_ssh_key"`
 }
@@ -76,6 +79,9 @@ type WorkspaceAPIResponse struct {
 	DriftDetectionEnabled *bool           `json:"drift_detection_enabled"`
 	RemedyDrift           *bool           `json:"remedy_drift"`
 	AutoImplementChanges  *bool           `json:"auto_implement_changes"`
+	ValidateMode          *string         `json:"validate_mode"`
+	TflintMode            *string         `json:"tflint_mode"`
+	TflintPlugins         []string        `json:"tflint_plugins"`
 	SshId                 string          `json:"ssh_id"`
 	ModuleSshKey          string          `json:"module_ssh_key"`
 }
@@ -97,6 +103,9 @@ type WorkspaceCreateRequest struct {
 	DriftDetectionEnabled *bool          `json:"drift_detection_enabled,omitempty"`
 	RemedyDrift           *bool          `json:"remedy_drift,omitempty"`
 	AutoImplementChanges  *bool          `json:"auto_implement_changes,omitempty"`
+	ValidateMode          *string        `json:"validate_mode,omitempty"`
+	TflintMode            *string        `json:"tflint_mode,omitempty"`
+	TflintPlugins         []string       `json:"tflint_plugins,omitempty"`
 	SshId                 string         `json:"ssh_id,omitempty"`
 	ModuleSshKey          string         `json:"module_ssh_key,omitempty"`
 }
@@ -118,6 +127,9 @@ type WorkspaceUpdateRequest struct {
 	DriftDetectionEnabled *bool          `json:"drift_detection_enabled,omitempty"`
 	RemedyDrift           *bool          `json:"remedy_drift,omitempty"`
 	AutoImplementChanges  *bool          `json:"auto_implement_changes,omitempty"`
+	ValidateMode          *string        `json:"validate_mode,omitempty"`
+	TflintMode            *string        `json:"tflint_mode,omitempty"`
+	TflintPlugins         []string       `json:"tflint_plugins,omitempty"`
 	SshId                 string         `json:"ssh_id,omitempty"`
 	ModuleSshKey          string         `json:"module_ssh_key,omitempty"`
 }
@@ -247,6 +259,19 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "Whether to auto-implement changes. If null, inherits from the organization.",
 				Optional:    true,
 				Computed:    true,
+			},
+			"validate_mode": schema.StringAttribute{
+				Description: "Pre-plan validate hook mode: off, advisory or blocking. If null, inherits from the organization.",
+				Optional:    true,
+			},
+			"tflint_mode": schema.StringAttribute{
+				Description: "Pre-plan tflint hook mode: off, advisory or blocking. If null, inherits from the organization.",
+				Optional:    true,
+			},
+			"tflint_plugins": schema.ListAttribute{
+				Description: "tflint ruleset plugins to enable (e.g. [\"aws\"]). If null, inherits from the organization.",
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 			"ssh_id": schema.StringAttribute{
 				Description: "ID of the SSH key to use for the workspace.",
@@ -383,6 +408,25 @@ func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceMod
 	} else {
 		data.AutoImplementChanges = types.BoolNull()
 	}
+	if workspace.ValidateMode != nil {
+		data.ValidateMode = types.StringValue(*workspace.ValidateMode)
+	} else {
+		data.ValidateMode = types.StringNull()
+	}
+	if workspace.TflintMode != nil {
+		data.TflintMode = types.StringValue(*workspace.TflintMode)
+	} else {
+		data.TflintMode = types.StringNull()
+	}
+	if workspace.TflintPlugins != nil {
+		pluginVals := make([]attr.Value, 0, len(workspace.TflintPlugins))
+		for _, p := range workspace.TflintPlugins {
+			pluginVals = append(pluginVals, types.StringValue(p))
+		}
+		data.TflintPlugins = types.ListValueMust(types.StringType, pluginVals)
+	} else {
+		data.TflintPlugins = types.ListNull(types.StringType)
+	}
 	data.SshId = types.StringValue(workspace.SshId)
 	data.ModuleSshKey = types.StringValue(workspace.ModuleSshKey)
 	if workspace.Tags != nil {
@@ -444,6 +488,23 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 	if !data.AutoImplementChanges.IsNull() {
 		v := data.AutoImplementChanges.ValueBool()
 		createReq.AutoImplementChanges = &v
+	}
+	if !data.ValidateMode.IsNull() {
+		v := data.ValidateMode.ValueString()
+		createReq.ValidateMode = &v
+	}
+	if !data.TflintMode.IsNull() {
+		v := data.TflintMode.ValueString()
+		createReq.TflintMode = &v
+	}
+	if !data.TflintPlugins.IsNull() && !data.TflintPlugins.IsUnknown() {
+		var plugins []string
+		diags = data.TflintPlugins.ElementsAs(ctx, &plugins, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		createReq.TflintPlugins = plugins
 	}
 	if !data.SshId.IsNull() {
 		createReq.SshId = data.SshId.ValueString()
@@ -651,6 +712,23 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 			v := plan.AutoImplementChanges.ValueBool()
 			updateReq.AutoImplementChanges = &v
 		}
+	}
+	if !plan.ValidateMode.Equal(state.ValidateMode) && !plan.ValidateMode.IsNull() {
+		v := plan.ValidateMode.ValueString()
+		updateReq.ValidateMode = &v
+	}
+	if !plan.TflintMode.Equal(state.TflintMode) && !plan.TflintMode.IsNull() {
+		v := plan.TflintMode.ValueString()
+		updateReq.TflintMode = &v
+	}
+	if !plan.TflintPlugins.Equal(state.TflintPlugins) && !plan.TflintPlugins.IsNull() && !plan.TflintPlugins.IsUnknown() {
+		var plugins []string
+		diags = plan.TflintPlugins.ElementsAs(ctx, &plugins, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		updateReq.TflintPlugins = plugins
 	}
 	if !plan.SshId.Equal(state.SshId) && !plan.SshId.IsNull() {
 		updateReq.SshId = plan.SshId.ValueString()

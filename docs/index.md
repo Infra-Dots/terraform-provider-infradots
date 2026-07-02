@@ -22,3 +22,19 @@ description: |-
 ### Optional
 - `hostname` (String) The hostname of the Infradots instance. 
 - `tls_insecure_skip_verify` (String) If true, skips TLS certificate verification (not recommended for production).
+
+## Referencing workspaces and organizations
+
+Throughout this provider, workspaces and organizations are referenced by their **name**, never by their internal ID (UUID). This applies to every resource and data source that ties into a workspace:
+
+| Resource / data source | Argument | Required? |
+| --- | --- | --- |
+| `infradots_variable` | `workspace` | Optional — omit for an organization-level variable |
+| `infradots_permission` | `workspace_name` | Optional — omit for an organization-level permission |
+| `infradots_workspace_integration` | `workspace_name` | Required |
+| `infradots_workspace_interconnection` | `workspace_name` | Required |
+| `infradots_workspace_schedule` | `workspace_name` | Required |
+
+The `id` attribute exported by `infradots_workspace` (a UUID) is only useful as an output or for wiring up dependencies between resources — it is **not** accepted by the arguments above. Pass the workspace name (e.g. `infradots_workspace.example.name` or the literal name), not `infradots_workspace.example.id`.
+
+Organizations follow the same rule: use the `organization_name` argument (a name), not an ID.

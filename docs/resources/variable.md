@@ -27,6 +27,7 @@ The following arguments are supported:
 * `category` - (Optional) The category of the variable. Valid values are "terraform" or "env". Defaults to "terraform".
 * `sensitive` - (Optional) Whether the variable contains sensitive information. Defaults to false.
 * `hcl` - (Optional) Whether to parse the value as HCL. Defaults to false.
+* `workspace` - (Optional) The **name** of the workspace this variable is scoped to (the workspace name, not its ID). When omitted, the variable is organization-level. Note the argument is `workspace`, not `workspace_name` as on other resources.
 
 ## Attributes Reference
 
@@ -38,7 +39,13 @@ In addition to all arguments above, the following attributes are exported:
 
 ## Import
 
-Variables can be imported using the `organization_name` and `id` separated by a colon, e.g.,
+Organization-level variables are imported using the `organization_name` and the variable `key` (not its ID), separated by a colon:
 
 ```
-$ terraform import infradots_variable.example infradots:2e240d2c-78e0-4832-abdc-daa33477a238
+$ terraform import infradots_variable.example infradots:environment
+```
+
+Workspace-scoped variables add the workspace **name** (not its ID) as a middle segment — `organization_name:workspace_name:key`:
+
+```
+$ terraform import infradots_variable.example infradots:production:environment
