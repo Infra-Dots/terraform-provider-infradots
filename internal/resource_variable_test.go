@@ -67,12 +67,14 @@ func (m *MockVariableRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 		return resp, nil
 	}
 
-	// Handle Read (GET to /api/organizations/{org_name}/variables/{id})
+	// Handle Read (GET to /api/organizations/{org_name}/variables/{id}).
+	// value is returned redacted (empty), as the real API does for secrets; Read
+	// must keep the value already stored in state rather than adopt this.
 	if req.Method == http.MethodGet && strings.Contains(url, "/api/organizations/test-org/variables/4f450f4d-9af2-5432-cdef-f0045678901b") {
 		jsonResp := `{
 			"id": "4f450f4d-9af2-5432-cdef-f0045678901b",
 			"key": "test-variable",
-			"value": "test-value",
+			"value": "",
 			"description": "Test variable for Terraform",
 			"category": "terraform",
 			"sensitive": false,
@@ -289,11 +291,13 @@ func TestVariableResource_Read(t *testing.T) {
 	// Create test context
 	ctx := context.Background()
 
-	// Setup initial state
+	// Setup initial state. value is a write-only secret already stored in state;
+	// Read must preserve it (the API redacts value in responses).
 	var state VariableResourceModel
 	state.ID = types.StringValue("4f450f4d-9af2-5432-cdef-f0045678901b")
 	state.OrganizationName = types.StringValue("test-org")
 	state.Key = types.StringValue("test-variable")
+	state.Value = types.StringValue("test-value")
 
 	// Create request/response objects
 	schemaResp := &resource.SchemaResponse{}

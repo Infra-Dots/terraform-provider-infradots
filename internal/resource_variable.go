@@ -234,7 +234,9 @@ func (r *VariableResource) Create(ctx context.Context, req resource.CreateReques
 	// Update the model with the response data
 	data.ID = types.StringValue(variable.ID)
 	data.Key = types.StringValue(variable.Key)
-	data.Value = types.StringValue(variable.Value)
+	// value is a Required, write-only secret: the API redacts it in responses, so
+	// keep the configured value rather than overwrite state with the redacted one
+	// (otherwise Terraform reports "inconsistent values for sensitive attribute").
 	data.Description = types.StringValue(variable.Description)
 	data.Category = types.StringValue(variable.Category)
 	data.Sensitive = types.BoolValue(variable.Sensitive)
@@ -314,7 +316,9 @@ func (r *VariableResource) Read(ctx context.Context, req resource.ReadRequest, r
 	// Update the model with the response data
 	data.ID = types.StringValue(variable.ID)
 	data.Key = types.StringValue(variable.Key)
-	data.Value = types.StringValue(variable.Value)
+	// value is a write-only secret (see Create): keep the stored value instead of
+	// overwriting it with the API's redacted response, which would show perpetual
+	// drift on this Required attribute.
 	data.Description = types.StringValue(variable.Description)
 	data.Category = types.StringValue(variable.Category)
 	data.Sensitive = types.BoolValue(variable.Sensitive)
@@ -424,7 +428,8 @@ func (r *VariableResource) Update(ctx context.Context, req resource.UpdateReques
 	// Update the model with the response data
 	plan.ID = types.StringValue(variable.ID)
 	plan.Key = types.StringValue(variable.Key)
-	plan.Value = types.StringValue(variable.Value)
+	// value is a write-only secret (see Create): keep the configured value rather
+	// than the API's redacted response to avoid an inconsistent-result error.
 	plan.Description = types.StringValue(variable.Description)
 	plan.Category = types.StringValue(variable.Category)
 	plan.Sensitive = types.BoolValue(variable.Sensitive)
