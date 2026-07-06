@@ -12,6 +12,14 @@ resource "infradots_workspace" "example" {
   source            = "https://github.com/example/terraform-config"
   branch            = "main"
   terraform_version = "1.5.0"
+
+  # Runs in the prod/ working directory, and is also triggered by changes to
+  # shared modules and root variable files outside that directory.
+  folder = "prod"
+  trigger_patterns = [
+    { pattern = "modules/vpc/.*" },
+    { pattern = "shared/.*\\.tfvars$", enabled = false },
+  ]
 }
 ```
 
@@ -26,6 +34,10 @@ The following arguments are supported:
 * `branch` - (Required) Git branch to use.
 * `terraform_version` - (Required) Terraform version to use for this workspace.
 * `vcs_id` - (Optional) ID of a VCS Provider in infradots to connect to the workspace.
+* `folder` - (Optional) The working directory (subfolder) within the source repository where commands run. Defaults to `/`. Changes under this folder trigger a run.
+* `trigger_patterns` - (Optional) A list of regex patterns matched against the changed file paths of a VCS push or pull request. A changed file triggers a run for this workspace if any enabled pattern matches, **in addition to** changes under `folder` (the two rules are OR'd) — use it to also run on shared modules or root variable files outside the working directory. Omitting the argument keeps any existing patterns; set it to `[]` to clear them. Each element supports:
+  * `pattern` - (Required) A regular expression matched against repo-relative changed file paths (e.g. `modules/vpc/.*`). Anchor with `^`/`$` as needed. Validated to compile server-side; an invalid pattern is rejected.
+  * `enabled` - (Optional) Whether the pattern is active. Defaults to `true`.
 
 ## Attributes Reference
 

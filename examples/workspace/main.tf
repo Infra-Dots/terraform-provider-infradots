@@ -7,7 +7,7 @@ terraform {
 }
 
 provider "infradots" {
-  host  = "api.infradots.com" 
+  host  = "api.infradots.com"
   token = "idp-token"
 }
 
@@ -23,6 +23,13 @@ resource "infradots_workspace" "example" {
   source            = "https://github.com/example/terraform-config"
   branch            = "main"
   terraform_version = "1.5.0"
+  folder            = "prod"
+
+  # Also trigger a run when shared modules or root tfvars change, not only the prod/ folder.
+  trigger_patterns = [
+    { pattern = "modules/.*" },
+    { pattern = "^globals\\.tfvars$" },
+  ]
 }
 
 # Output the workspace details
