@@ -44,6 +44,7 @@ type WorkspaceResourceModel struct {
 	DefaultJobAction      types.String `tfsdk:"default_job_action"`
 	WorkerPoolID          types.String `tfsdk:"worker_pool_id"`
 	Folder                types.String `tfsdk:"folder"`
+	TriggerPatterns       types.List   `tfsdk:"trigger_patterns"`
 	ExecutionMode         types.String `tfsdk:"execution_mode"`
 	Tags                  types.Map    `tfsdk:"tags"`
 	AgentsEnabled         types.Bool   `tfsdk:"agents_enabled"`
@@ -57,81 +58,104 @@ type WorkspaceResourceModel struct {
 	ModuleSshKey          types.String `tfsdk:"module_ssh_key"`
 }
 
+// TriggerPatternModel is a single {pattern, enabled} element of the trigger_patterns list.
+type TriggerPatternModel struct {
+	Pattern types.String `tfsdk:"pattern"`
+	Enabled types.Bool   `tfsdk:"enabled"`
+}
+
+// TriggerPattern is the JSON shape exchanged with the API for a trigger pattern.
+type TriggerPattern struct {
+	Pattern string `json:"pattern"`
+	Enabled bool   `json:"enabled"`
+}
+
+// triggerPatternAttrTypes describes the object type of a trigger_patterns element.
+var triggerPatternAttrTypes = map[string]attr.Type{
+	"pattern": types.StringType,
+	"enabled": types.BoolType,
+}
+
+var triggerPatternObjectType = types.ObjectType{AttrTypes: triggerPatternAttrTypes}
+
 type WorkspaceAPIResponse struct {
-	ID                    string          `json:"id"`
-	Name                  string          `json:"name"`
-	Description           string          `json:"description"`
-	Source                string          `json:"source"`
-	Branch                string          `json:"branch"`
-	TerraformVersion      string          `json:"terraform_version"`
-	CreatedAt             time.Time       `json:"created_at"`
-	UpdatedAt             time.Time       `json:"updated_at"`
-	VCS                   *VCSAPIResponse `json:"vcs"`
-	Locked                bool            `json:"locked"`
-	AutoApply             bool            `json:"auto_apply"`
-	IacType               string          `json:"iac_type"`
-	DefaultJobAction      string          `json:"default_job_action"`
-	WorkerPool            *string         `json:"worker_pool"`
-	Folder                string          `json:"folder"`
-	ExecutionMode         string          `json:"execution_mode"`
-	Tags                  map[string]any  `json:"tags"`
-	AgentsEnabled         bool            `json:"agents_enabled"`
-	DriftDetectionEnabled *bool           `json:"drift_detection_enabled"`
-	RemedyDrift           *bool           `json:"remedy_drift"`
-	AutoImplementChanges  *bool           `json:"auto_implement_changes"`
-	ValidateMode          *string         `json:"validate_mode"`
-	TflintMode            *string         `json:"tflint_mode"`
-	TflintPlugins         []string        `json:"tflint_plugins"`
-	SshId                 string          `json:"ssh_id"`
-	ModuleSshKey          string          `json:"module_ssh_key"`
+	ID                    string           `json:"id"`
+	Name                  string           `json:"name"`
+	Description           string           `json:"description"`
+	Source                string           `json:"source"`
+	Branch                string           `json:"branch"`
+	TerraformVersion      string           `json:"terraform_version"`
+	CreatedAt             time.Time        `json:"created_at"`
+	UpdatedAt             time.Time        `json:"updated_at"`
+	VCS                   *VCSAPIResponse  `json:"vcs"`
+	Locked                bool             `json:"locked"`
+	AutoApply             bool             `json:"auto_apply"`
+	IacType               string           `json:"iac_type"`
+	DefaultJobAction      string           `json:"default_job_action"`
+	WorkerPool            *string          `json:"worker_pool"`
+	Folder                string           `json:"folder"`
+	TriggerPatterns       []TriggerPattern `json:"trigger_patterns"`
+	ExecutionMode         string           `json:"execution_mode"`
+	Tags                  map[string]any   `json:"tags"`
+	AgentsEnabled         bool             `json:"agents_enabled"`
+	DriftDetectionEnabled *bool            `json:"drift_detection_enabled"`
+	RemedyDrift           *bool            `json:"remedy_drift"`
+	AutoImplementChanges  *bool            `json:"auto_implement_changes"`
+	ValidateMode          *string          `json:"validate_mode"`
+	TflintMode            *string          `json:"tflint_mode"`
+	TflintPlugins         []string         `json:"tflint_plugins"`
+	SshId                 string           `json:"ssh_id"`
+	ModuleSshKey          string           `json:"module_ssh_key"`
 }
 
 type WorkspaceCreateRequest struct {
-	Name                  string         `json:"name"`
-	Description           string         `json:"description,omitempty"`
-	Source                string         `json:"source"`
-	Branch                string         `json:"branch"`
-	TerraformVersion      string         `json:"terraform_version"`
-	AutoApply             bool           `json:"auto_apply"`
-	IacType               string         `json:"iac_type,omitempty"`
-	DefaultJobAction      string         `json:"default_job_action,omitempty"`
-	WorkerPool            string         `json:"worker_pool,omitempty"`
-	Folder                string         `json:"folder,omitempty"`
-	ExecutionMode         string         `json:"execution_mode,omitempty"`
-	Tags                  map[string]any `json:"tags,omitempty"`
-	AgentsEnabled         bool           `json:"agents_enabled"`
-	DriftDetectionEnabled *bool          `json:"drift_detection_enabled,omitempty"`
-	RemedyDrift           *bool          `json:"remedy_drift,omitempty"`
-	AutoImplementChanges  *bool          `json:"auto_implement_changes,omitempty"`
-	ValidateMode          *string        `json:"validate_mode,omitempty"`
-	TflintMode            *string        `json:"tflint_mode,omitempty"`
-	TflintPlugins         []string       `json:"tflint_plugins,omitempty"`
-	SshId                 string         `json:"ssh_id,omitempty"`
-	ModuleSshKey          string         `json:"module_ssh_key,omitempty"`
+	Name                  string           `json:"name"`
+	Description           string           `json:"description,omitempty"`
+	Source                string           `json:"source"`
+	Branch                string           `json:"branch"`
+	TerraformVersion      string           `json:"terraform_version"`
+	AutoApply             bool             `json:"auto_apply"`
+	IacType               string           `json:"iac_type,omitempty"`
+	DefaultJobAction      string           `json:"default_job_action,omitempty"`
+	WorkerPool            string           `json:"worker_pool,omitempty"`
+	Folder                string           `json:"folder,omitempty"`
+	TriggerPatterns       []TriggerPattern `json:"trigger_patterns,omitempty"`
+	ExecutionMode         string           `json:"execution_mode,omitempty"`
+	Tags                  map[string]any   `json:"tags,omitempty"`
+	AgentsEnabled         bool             `json:"agents_enabled"`
+	DriftDetectionEnabled *bool            `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift           *bool            `json:"remedy_drift,omitempty"`
+	AutoImplementChanges  *bool            `json:"auto_implement_changes,omitempty"`
+	ValidateMode          *string          `json:"validate_mode,omitempty"`
+	TflintMode            *string          `json:"tflint_mode,omitempty"`
+	TflintPlugins         []string         `json:"tflint_plugins,omitempty"`
+	SshId                 string           `json:"ssh_id,omitempty"`
+	ModuleSshKey          string           `json:"module_ssh_key,omitempty"`
 }
 
 type WorkspaceUpdateRequest struct {
-	Name                  string         `json:"name,omitempty"`
-	Description           string         `json:"description,omitempty"`
-	Source                string         `json:"source,omitempty"`
-	Branch                string         `json:"branch,omitempty"`
-	TerraformVersion      string         `json:"terraform_version,omitempty"`
-	AutoApply             *bool          `json:"auto_apply,omitempty"`
-	IacType               string         `json:"iac_type,omitempty"`
-	DefaultJobAction      string         `json:"default_job_action,omitempty"`
-	WorkerPool            string         `json:"worker_pool,omitempty"`
-	Folder                string         `json:"folder,omitempty"`
-	ExecutionMode         string         `json:"execution_mode,omitempty"`
-	Tags                  map[string]any `json:"tags,omitempty"`
-	AgentsEnabled         *bool          `json:"agents_enabled,omitempty"`
-	DriftDetectionEnabled *bool          `json:"drift_detection_enabled,omitempty"`
-	RemedyDrift           *bool          `json:"remedy_drift,omitempty"`
-	AutoImplementChanges  *bool          `json:"auto_implement_changes,omitempty"`
-	ValidateMode          *string        `json:"validate_mode,omitempty"`
-	TflintMode            *string        `json:"tflint_mode,omitempty"`
-	TflintPlugins         []string       `json:"tflint_plugins,omitempty"`
-	SshId                 string         `json:"ssh_id,omitempty"`
-	ModuleSshKey          string         `json:"module_ssh_key,omitempty"`
+	Name                  string            `json:"name,omitempty"`
+	Description           string            `json:"description,omitempty"`
+	Source                string            `json:"source,omitempty"`
+	Branch                string            `json:"branch,omitempty"`
+	TerraformVersion      string            `json:"terraform_version,omitempty"`
+	AutoApply             *bool             `json:"auto_apply,omitempty"`
+	IacType               string            `json:"iac_type,omitempty"`
+	DefaultJobAction      string            `json:"default_job_action,omitempty"`
+	WorkerPool            string            `json:"worker_pool,omitempty"`
+	Folder                string            `json:"folder,omitempty"`
+	TriggerPatterns       *[]TriggerPattern `json:"trigger_patterns,omitempty"`
+	ExecutionMode         string            `json:"execution_mode,omitempty"`
+	Tags                  map[string]any    `json:"tags,omitempty"`
+	AgentsEnabled         *bool             `json:"agents_enabled,omitempty"`
+	DriftDetectionEnabled *bool             `json:"drift_detection_enabled,omitempty"`
+	RemedyDrift           *bool             `json:"remedy_drift,omitempty"`
+	AutoImplementChanges  *bool             `json:"auto_implement_changes,omitempty"`
+	ValidateMode          *string           `json:"validate_mode,omitempty"`
+	TflintMode            *string           `json:"tflint_mode,omitempty"`
+	TflintPlugins         []string          `json:"tflint_plugins,omitempty"`
+	SshId                 string            `json:"ssh_id,omitempty"`
+	ModuleSshKey          string            `json:"module_ssh_key,omitempty"`
 }
 
 type WorkspaceResource struct {
@@ -225,6 +249,27 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("/"),
+			},
+			"trigger_patterns": schema.ListNestedAttribute{
+				Description: "Regex patterns matched against changed file paths in a VCS push/PR. A changed " +
+					"file triggers this workspace if any enabled pattern matches, OR'd with the folder rule " +
+					"(changes under 'folder' always trigger). Omitting keeps existing patterns; set to [] to clear.",
+				Optional: true,
+				Computed: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"pattern": schema.StringAttribute{
+							Description: "Regex matched against repo-relative changed file paths (e.g. 'modules/vpc/.*').",
+							Required:    true,
+						},
+						"enabled": schema.BoolAttribute{
+							Description: "Whether this pattern is active. Defaults to true.",
+							Optional:    true,
+							Computed:    true,
+							Default:     booldefault.StaticBool(true),
+						},
+					},
+				},
 			},
 			"execution_mode": schema.StringAttribute{
 				Description: "Execution mode for the workspace: Local or Remote.",
@@ -389,6 +434,14 @@ func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceMod
 	if workspace.Folder != "" {
 		data.Folder = types.StringValue(workspace.Folder)
 	}
+	tpVals := make([]attr.Value, 0, len(workspace.TriggerPatterns))
+	for _, tp := range workspace.TriggerPatterns {
+		tpVals = append(tpVals, types.ObjectValueMust(triggerPatternAttrTypes, map[string]attr.Value{
+			"pattern": types.StringValue(tp.Pattern),
+			"enabled": types.BoolValue(tp.Enabled),
+		}))
+	}
+	data.TriggerPatterns = types.ListValueMust(triggerPatternObjectType, tpVals)
 	if workspace.ExecutionMode != "" {
 		data.ExecutionMode = types.StringValue(workspace.ExecutionMode)
 	}
@@ -505,6 +558,22 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 			return
 		}
 		createReq.TflintPlugins = plugins
+	}
+	if !data.TriggerPatterns.IsNull() && !data.TriggerPatterns.IsUnknown() {
+		var tps []TriggerPatternModel
+		diags = data.TriggerPatterns.ElementsAs(ctx, &tps, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		patterns := make([]TriggerPattern, 0, len(tps))
+		for _, tp := range tps {
+			patterns = append(patterns, TriggerPattern{
+				Pattern: tp.Pattern.ValueString(),
+				Enabled: tp.Enabled.ValueBool(),
+			})
+		}
+		createReq.TriggerPatterns = patterns
 	}
 	if !data.SshId.IsNull() {
 		createReq.SshId = data.SshId.ValueString()
@@ -729,6 +798,24 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 			return
 		}
 		updateReq.TflintPlugins = plugins
+	}
+	if !plan.TriggerPatterns.Equal(state.TriggerPatterns) {
+		patterns := []TriggerPattern{}
+		if !plan.TriggerPatterns.IsNull() && !plan.TriggerPatterns.IsUnknown() {
+			var tps []TriggerPatternModel
+			diags = plan.TriggerPatterns.ElementsAs(ctx, &tps, false)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			for _, tp := range tps {
+				patterns = append(patterns, TriggerPattern{
+					Pattern: tp.Pattern.ValueString(),
+					Enabled: tp.Enabled.ValueBool(),
+				})
+			}
+		}
+		updateReq.TriggerPatterns = &patterns
 	}
 	if !plan.SshId.Equal(state.SshId) && !plan.SshId.IsNull() {
 		updateReq.SshId = plan.SshId.ValueString()

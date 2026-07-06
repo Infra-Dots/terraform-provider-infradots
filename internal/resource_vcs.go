@@ -278,6 +278,9 @@ func (r *VCSResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *VCSResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

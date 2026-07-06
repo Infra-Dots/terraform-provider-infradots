@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -233,6 +234,7 @@ func TestWorkspaceResource_Create(t *testing.T) {
 	plan.AgentsEnabled = types.BoolValue(false)
 	plan.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	plan.TflintPlugins = types.ListNull(types.StringType)
+	plan.TriggerPatterns = types.ListNull(triggerPatternObjectType)
 	plan.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -309,6 +311,7 @@ func TestWorkspaceResource_Read(t *testing.T) {
 	state.AgentsEnabled = types.BoolValue(false)
 	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	state.TflintPlugins = types.ListNull(types.StringType)
+	state.TriggerPatterns = types.ListNull(triggerPatternObjectType)
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -384,6 +387,7 @@ func TestWorkspaceResource_Update(t *testing.T) {
 	state.AgentsEnabled = types.BoolValue(false)
 	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	state.TflintPlugins = types.ListNull(types.StringType)
+	state.TriggerPatterns = types.ListNull(triggerPatternObjectType)
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -411,6 +415,7 @@ func TestWorkspaceResource_Update(t *testing.T) {
 	plan.AgentsEnabled = types.BoolValue(false)
 	plan.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	plan.TflintPlugins = types.ListNull(types.StringType)
+	plan.TriggerPatterns = types.ListNull(triggerPatternObjectType)
 	plan.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -493,6 +498,7 @@ func TestWorkspaceResource_Delete(t *testing.T) {
 	state.AgentsEnabled = types.BoolValue(false)
 	state.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	state.TflintPlugins = types.ListNull(types.StringType)
+	state.TriggerPatterns = types.ListNull(triggerPatternObjectType)
 	state.VCS = types.ObjectNull(map[string]attr.Type{
 		"id":          types.StringType,
 		"name":        types.StringType,
@@ -697,4 +703,137 @@ func TestWorkspaceResource_ImportState_NotFound(t *testing.T) {
 	// Should have errors
 	require.True(t, response.Diagnostics.HasError())
 	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Workspace not found")
+}
+
+// capturingRoundTripper records the outgoing request body and returns a canned response,
+// so we can assert what the provider sends to the API.
+type capturingRoundTripper struct {
+	lastBody string
+	status   int
+	respBody string
+}
+
+func (m *capturingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Body != nil {
+		b, _ := io.ReadAll(req.Body)
+		m.lastBody = string(b)
+	}
+	resp := &http.Response{
+		Header:     make(http.Header),
+		Request:    req,
+		StatusCode: m.status,
+		Body:       io.NopCloser(strings.NewReader(m.respBody)),
+	}
+	resp.Header.Set("Content-Type", "application/json")
+	return resp, nil
+}
+
+func nullVCSObject() types.Object {
+	return types.ObjectNull(map[string]attr.Type{
+		"id": types.StringType, "name": types.StringType, "vcs_type": types.StringType,
+		"url": types.StringType, "description": types.StringType,
+		"created_at": types.StringType, "updated_at": types.StringType,
+	})
+}
+
+func TestWorkspaceResource_TriggerPatternsMapping(t *testing.T) {
+	ctx := context.Background()
+
+	var data WorkspaceResourceModel
+	mapWorkspaceResponseToModel(ctx, &data, WorkspaceAPIResponse{
+		TriggerPatterns: []TriggerPattern{
+			{Pattern: "modules/vpc/.*", Enabled: true},
+			{Pattern: "shared/.*", Enabled: false},
+		},
+	})
+
+	var got []TriggerPatternModel
+	require.Empty(t, data.TriggerPatterns.ElementsAs(ctx, &got, false))
+	require.Len(t, got, 2)
+	assert.Equal(t, "modules/vpc/.*", got[0].Pattern.ValueString())
+	assert.True(t, got[0].Enabled.ValueBool())
+	assert.Equal(t, "shared/.*", got[1].Pattern.ValueString())
+	assert.False(t, got[1].Enabled.ValueBool())
+
+	// No patterns in the API response → concrete empty list (not null), consistent with the
+	// Optional+Computed schema (avoids null-vs-empty inconsistency since the API returns []).
+	var empty WorkspaceResourceModel
+	mapWorkspaceResponseToModel(ctx, &empty, WorkspaceAPIResponse{})
+	assert.False(t, empty.TriggerPatterns.IsNull())
+	assert.Equal(t, 0, len(empty.TriggerPatterns.Elements()))
+}
+
+func TestWorkspaceResource_Create_SendsTriggerPatterns(t *testing.T) {
+	ctx := context.Background()
+	capt := &capturingRoundTripper{
+		status: http.StatusCreated,
+		respBody: `{
+			"id": "id-1", "name": "test-workspace",
+			"source": "https://github.com/test/repo", "branch": "main",
+			"terraform_version": "1.5.0", "folder": "/prod", "execution_mode": "Remote",
+			"tags": {},
+			"trigger_patterns": [
+				{"pattern": "modules/vpc/.*", "enabled": true},
+				{"pattern": "shared/.*", "enabled": false}
+			]
+		}`,
+	}
+	r := &WorkspaceResource{provider: &InfradotsProvider{
+		host: "api.infradots.com", token: "test-token",
+		client: &http.Client{Transport: capt},
+	}}
+
+	var plan WorkspaceResourceModel
+	plan.OrganizationName = types.StringValue("test-org")
+	plan.Name = types.StringValue("test-workspace")
+	plan.Source = types.StringValue("https://github.com/test/repo")
+	plan.Branch = types.StringValue("main")
+	plan.TerraformVersion = types.StringValue("1.5.0")
+	plan.Locked = types.BoolValue(false)
+	plan.AutoApply = types.BoolValue(false)
+	plan.IacType = types.StringValue("TF")
+	plan.DefaultJobAction = types.StringValue("plan")
+	plan.Folder = types.StringValue("/prod")
+	plan.ExecutionMode = types.StringValue("Remote")
+	plan.AgentsEnabled = types.BoolValue(false)
+	plan.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	plan.TflintPlugins = types.ListNull(types.StringType)
+	plan.VCS = nullVCSObject()
+	plan.TriggerPatterns = types.ListValueMust(triggerPatternObjectType, []attr.Value{
+		types.ObjectValueMust(triggerPatternAttrTypes, map[string]attr.Value{
+			"pattern": types.StringValue("modules/vpc/.*"),
+			"enabled": types.BoolValue(true),
+		}),
+		types.ObjectValueMust(triggerPatternAttrTypes, map[string]attr.Value{
+			"pattern": types.StringValue("shared/.*"),
+			"enabled": types.BoolValue(false),
+		}),
+	})
+
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	request := resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema}}
+	require.Empty(t, request.Plan.Set(ctx, &plan))
+	response := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+
+	r.Create(ctx, request, &response)
+	require.False(t, response.Diagnostics.HasError())
+
+	// The outgoing request body carries the trigger patterns.
+	var sent WorkspaceCreateRequest
+	require.NoError(t, json.Unmarshal([]byte(capt.lastBody), &sent))
+	require.Len(t, sent.TriggerPatterns, 2)
+	assert.Equal(t, "modules/vpc/.*", sent.TriggerPatterns[0].Pattern)
+	assert.True(t, sent.TriggerPatterns[0].Enabled)
+	assert.Equal(t, "shared/.*", sent.TriggerPatterns[1].Pattern)
+	assert.False(t, sent.TriggerPatterns[1].Enabled)
+
+	// And the API response is mapped back into state.
+	var state WorkspaceResourceModel
+	require.Empty(t, response.State.Get(ctx, &state))
+	var mapped []TriggerPatternModel
+	require.Empty(t, state.TriggerPatterns.ElementsAs(ctx, &mapped, false))
+	require.Len(t, mapped, 2)
+	assert.Equal(t, "modules/vpc/.*", mapped[0].Pattern.ValueString())
+	assert.False(t, mapped[1].Enabled.ValueBool())
 }
