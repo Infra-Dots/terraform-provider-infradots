@@ -1,5 +1,7 @@
 *.dll
 *.exe
+# Built provider binary (`go build` output)
+terraform-provider-infradots
 .DS_Store
 example.tf
 terraform.tfplan
