@@ -39,13 +39,6 @@ type VCSDataSourceModel struct {
 	UpdatedAt        types.String `tfsdk:"updated_at"`
 }
 
-// VCSDataSourceFilterModel maps the filter parameters.
-type VCSDataSourceFilterModel struct {
-	ID               types.String `tfsdk:"id"`
-	OrganizationName types.String `tfsdk:"organization_name"`
-	Name             types.String `tfsdk:"name"`
-}
-
 // Metadata returns the data source type name.
 func (d *VCSDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vcs_data"
@@ -120,16 +113,17 @@ func (d *VCSDataSource) Configure(_ context.Context, req datasource.ConfigureReq
 // Read fetches the data from the API.
 func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var data VCSDataSourceModel
-	var filter VCSDataSourceFilterModel
 
-	// Read input configuration into filter
-	resp.Diagnostics.Append(req.Config.Get(ctx, &filter)...)
+	// Read input configuration. The model must contain a field for every schema
+	// attribute (including the computed ones), otherwise the framework fails to
+	// convert the config object into the struct.
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Validate input parameters
-	if filter.ID.IsNull() && (filter.OrganizationName.IsNull() || filter.Name.IsNull()) {
+	if data.ID.IsNull() && (data.OrganizationName.IsNull() || data.Name.IsNull()) {
 		resp.Diagnostics.AddError(
 			"Missing required parameter",
 			"Either id or both organization_name and name must be specified",
@@ -139,11 +133,11 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 
 	var url string
 	// Determine the URL based on the filter
-	if !filter.ID.IsNull() {
+	if !data.ID.IsNull() {
 		// We need to first determine the organization name for this VCS ID
 		// This would typically require an additional API call to get the VCS details
 		// For this implementation, we'll require organization_name to be provided alongside ID
-		if filter.OrganizationName.IsNull() {
+		if data.OrganizationName.IsNull() {
 			resp.Diagnostics.AddError(
 				"Missing required parameter",
 				"When filtering by ID, organization_name must also be specified",
@@ -152,14 +146,14 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		}
 		url = fmt.Sprintf("https://%s/api/organizations/%s/vcs/%s/",
 			d.provider.host,
-			filter.OrganizationName.ValueString(),
-			filter.ID.ValueString())
+			data.OrganizationName.ValueString(),
+			data.ID.ValueString())
 	} else {
 		// Fetch by organization name and VCS name
 		// First get all VCS connections for the organization, then filter by name
 		url = fmt.Sprintf("https://%s/api/organizations/%s/vcs/",
 			d.provider.host,
-			filter.OrganizationName.ValueString())
+			data.OrganizationName.ValueString())
 	}
 
 	// Create HTTP request
@@ -195,7 +189,7 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 	}
 
 	// Process based on filter type
-	if !filter.ID.IsNull() {
+	if !data.ID.IsNull() {
 		// Single VCS response
 		var apiResp VCSAPIResponse
 		err = json.Unmarshal(body, &apiResp)
@@ -204,9 +198,8 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 			return
 		}
 
-		// Map response to model
+		// Map response to model (organization_name is preserved from config)
 		data.ID = types.StringValue(apiResp.ID)
-		data.OrganizationName = filter.OrganizationName
 		data.Name = types.StringValue(apiResp.Name)
 		data.VcsType = types.StringValue(apiResp.VcsType)
 		data.URL = types.StringValue(apiResp.URL)
@@ -225,10 +218,9 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 
 		found := false
 		for _, vcs := range apiRespList {
-			if vcs.Name == filter.Name.ValueString() {
-				// Map response to model
+			if vcs.Name == data.Name.ValueString() {
+				// Map response to model (organization_name is preserved from config)
 				data.ID = types.StringValue(vcs.ID)
-				data.OrganizationName = filter.OrganizationName
 				data.Name = types.StringValue(vcs.Name)
 				data.VcsType = types.StringValue(vcs.VcsType)
 				data.URL = types.StringValue(vcs.URL)
@@ -245,8 +237,8 @@ func (d *VCSDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 			resp.Diagnostics.AddError(
 				"VCS connection not found",
 				fmt.Sprintf("No VCS connection with name '%s' found in organization '%s'",
-					filter.Name.ValueString(),
-					filter.OrganizationName.ValueString()),
+					data.Name.ValueString(),
+					data.OrganizationName.ValueString()),
 			)
 			return
 		}

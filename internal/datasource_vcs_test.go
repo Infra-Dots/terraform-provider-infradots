@@ -9,6 +9,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,8 +35,8 @@ func (m *MockVCSDataSourceRoundTripper) RoundTrip(req *http.Request) (*http.Resp
 		jsonResp := `{
 			"id": "5f560f5e-0bf3-6543-defg-g1156789012c",
 			"name": "test-vcs",
-			"vcs_type": "github",
-			"url": "https://github.com",
+			"vcsType": "github",
+			"endpoint": "https://github.com",
 			"clientId": "test-client-id",
 			"description": "Test VCS connection for GitHub",
 			"created_at": "2025-07-07T12:00:00Z",
@@ -49,8 +51,8 @@ func (m *MockVCSDataSourceRoundTripper) RoundTrip(req *http.Request) (*http.Resp
 		jsonResp := `[{
 			"id": "5f560f5e-0bf3-6543-defg-g1156789012c",
 			"name": "test-vcs",
-			"vcs_type": "github",
-			"url": "https://github.com",
+			"vcsType": "github",
+			"endpoint": "https://github.com",
 			"clientId": "test-client-id",
 			"description": "Test VCS connection for GitHub",
 			"created_at": "2025-07-07T12:00:00Z",
@@ -58,8 +60,8 @@ func (m *MockVCSDataSourceRoundTripper) RoundTrip(req *http.Request) (*http.Resp
 		}, {
 			"id": "6f670f6f-1cf4-7654-efgh-h2267890123d",
 			"name": "gitlab-vcs",
-			"vcs_type": "gitlab",
-			"url": "https://gitlab.com",
+			"vcsType": "gitlab",
+			"endpoint": "https://gitlab.com",
 			"clientId": "gitlab-client-id",
 			"description": "GitLab VCS connection",
 			"created_at": "2025-07-07T12:00:00Z",
@@ -206,4 +208,109 @@ func TestVCSDataSource_ConfigureInvalidProvider(t *testing.T) {
 	// Should have errors
 	require.True(t, resp.Diagnostics.HasError())
 	assert.Contains(t, resp.Diagnostics.Errors()[0].Summary(), "Unexpected Data Source Configure Type")
+}
+
+// readVCSDataSource is a helper that wires up a real tfsdk.Config from the data
+// source schema and invokes Read. Building the Config from the full schema is
+// what previously triggered the "convert tftypes.Value into
+// internal.VCSDataSourceFilterModel" error, so every test using this helper is a
+// regression guard for that bug.
+func readVCSDataSource(t *testing.T, d *VCSDataSource, config VCSDataSourceModel) (VCSDataSourceModel, *datasource.ReadResponse) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	schemaResp := &datasource.SchemaResponse{}
+	d.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	require.False(t, schemaResp.Diagnostics.HasError())
+
+	// tfsdk.Config has no Set (config is read-only for providers), so build the
+	// raw tftypes.Value through a State and hand it to the Config.
+	stateForConfig := tfsdk.State{Schema: schemaResp.Schema}
+	require.Empty(t, stateForConfig.Set(ctx, &config))
+
+	request := datasource.ReadRequest{
+		Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: stateForConfig.Raw},
+	}
+
+	response := &datasource.ReadResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema},
+	}
+	d.Read(ctx, request, response)
+
+	var out VCSDataSourceModel
+	// Only read the state back when Read succeeded; on error the state is unset.
+	if !response.Diagnostics.HasError() {
+		require.Empty(t, response.State.Get(ctx, &out))
+	}
+	return out, response
+}
+
+func TestVCSDataSource_ReadByID(t *testing.T) {
+	d := setupTestVCSDataSource(t)
+
+	// Only id + organization_name are set; the computed attributes are left null,
+	// mirroring how Terraform passes the config to Read.
+	out, response := readVCSDataSource(t, d, VCSDataSourceModel{
+		ID:               types.StringValue("5f560f5e-0bf3-6543-defg-g1156789012c"),
+		OrganizationName: types.StringValue("test-org"),
+	})
+
+	for _, diag := range response.Diagnostics.Errors() {
+		t.Logf("Error: %s - %s", diag.Summary(), diag.Detail())
+	}
+	require.False(t, response.Diagnostics.HasError())
+
+	assert.Equal(t, "5f560f5e-0bf3-6543-defg-g1156789012c", out.ID.ValueString())
+	assert.Equal(t, "test-org", out.OrganizationName.ValueString())
+	assert.Equal(t, "test-vcs", out.Name.ValueString())
+	assert.Equal(t, "github", out.VcsType.ValueString())
+	assert.Equal(t, "https://github.com", out.URL.ValueString())
+	assert.Equal(t, "test-client-id", out.ClientId.ValueString())
+	assert.Equal(t, "Test VCS connection for GitHub", out.Description.ValueString())
+}
+
+func TestVCSDataSource_ReadByName(t *testing.T) {
+	d := setupTestVCSDataSource(t)
+
+	// Fetch by organization_name + name (no id): exercises the list-and-filter path.
+	out, response := readVCSDataSource(t, d, VCSDataSourceModel{
+		OrganizationName: types.StringValue("test-org"),
+		Name:             types.StringValue("gitlab-vcs"),
+	})
+
+	for _, diag := range response.Diagnostics.Errors() {
+		t.Logf("Error: %s - %s", diag.Summary(), diag.Detail())
+	}
+	require.False(t, response.Diagnostics.HasError())
+
+	assert.Equal(t, "6f670f6f-1cf4-7654-efgh-h2267890123d", out.ID.ValueString())
+	assert.Equal(t, "test-org", out.OrganizationName.ValueString())
+	assert.Equal(t, "gitlab-vcs", out.Name.ValueString())
+	assert.Equal(t, "gitlab", out.VcsType.ValueString())
+	assert.Equal(t, "https://gitlab.com", out.URL.ValueString())
+}
+
+func TestVCSDataSource_ReadByNameNotFound(t *testing.T) {
+	d := setupTestVCSDataSource(t)
+
+	_, response := readVCSDataSource(t, d, VCSDataSourceModel{
+		OrganizationName: types.StringValue("test-org"),
+		Name:             types.StringValue("does-not-exist"),
+	})
+
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "VCS connection not found")
+}
+
+func TestVCSDataSource_ReadMissingParams(t *testing.T) {
+	d := setupTestVCSDataSource(t)
+
+	// Neither id nor (organization_name + name) provided.
+	_, response := readVCSDataSource(t, d, VCSDataSourceModel{
+		OrganizationName: types.StringValue("test-org"),
+	})
+
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Missing required parameter")
 }
