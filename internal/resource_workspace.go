@@ -14,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -56,6 +58,8 @@ type WorkspaceResourceModel struct {
 	TflintPlugins         types.List   `tfsdk:"tflint_plugins"`
 	SshId                 types.String `tfsdk:"ssh_id"`
 	ModuleSshKey          types.String `tfsdk:"module_ssh_key"`
+	CreateRepository      types.Bool   `tfsdk:"create_repository"`  // create-time only
+	RepositoryCreated     types.Bool   `tfsdk:"repository_created"` // set by Create, never by Read
 }
 
 // TriggerPatternModel is a single {pattern, enabled} element of the trigger_patterns list.
@@ -106,6 +110,8 @@ type WorkspaceAPIResponse struct {
 	TflintPlugins         []string         `json:"tflint_plugins"`
 	SshId                 string           `json:"ssh_id"`
 	ModuleSshKey          string           `json:"module_ssh_key"`
+	// Only present on create, and only when the workspace is bound to a VCS.
+	Repository *RepositoryStatus `json:"repository"`
 }
 
 type WorkspaceCreateRequest struct {
@@ -131,6 +137,18 @@ type WorkspaceCreateRequest struct {
 	TflintPlugins         []string         `json:"tflint_plugins,omitempty"`
 	SshId                 string           `json:"ssh_id,omitempty"`
 	ModuleSshKey          string           `json:"module_ssh_key,omitempty"`
+	Vcs                   string           `json:"vcs,omitempty"`
+	CreateRepository      *bool            `json:"create_repository,omitempty"`
+}
+
+// RepositoryStatus is the API's report on the git repo behind the workspace, returned under
+// "repository" when the workspace is bound to a VCS. Exists is a pointer because null means
+// "the check couldn't complete" -- distinct from false, "the repo isn't there".
+type RepositoryStatus struct {
+	Source  string `json:"source"`
+	Exists  *bool  `json:"exists"`
+	Created bool   `json:"created"`
+	Warning string `json:"warning,omitempty"`
 }
 
 type WorkspaceUpdateRequest struct {
@@ -156,6 +174,7 @@ type WorkspaceUpdateRequest struct {
 	TflintPlugins         []string          `json:"tflint_plugins,omitempty"`
 	SshId                 string            `json:"ssh_id,omitempty"`
 	ModuleSshKey          string            `json:"module_ssh_key,omitempty"`
+	Vcs                   string            `json:"vcs,omitempty"`
 }
 
 type WorkspaceResource struct {
@@ -209,6 +228,24 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "ID of a VCS Provider in infradots to connect to the workspace",
 				Required:    false,
 				Optional:    true,
+			},
+			"create_repository": schema.BoolAttribute{
+				Description: "Create the repository named by `source` on the connected VCS if it " +
+					"does not exist yet. Requires `vcs_id`. Applied at create time only: changing " +
+					"it later updates state without calling the API. When false (the default) a " +
+					"missing repository is reported as a warning and the workspace is still created.",
+				Optional: true,
+			},
+			"repository_created": schema.BoolAttribute{
+				Description: "Whether infradots created the repository while creating this " +
+					"workspace. Set on create; never refreshed, since the workspace read " +
+					"endpoint does not report repository state.",
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					// Read never refreshes this, so hold the created value. Without it every
+					// subsequent plan would show the attribute going unknown.
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"locked": schema.BoolAttribute{
 				Description: "Whether the workspace is locked.",
@@ -517,6 +554,13 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 	if !data.WorkerPoolID.IsNull() && data.WorkerPoolID.ValueString() != "" {
 		createReq.WorkerPool = data.WorkerPoolID.ValueString()
 	}
+	if !data.VcsId.IsNull() && data.VcsId.ValueString() != "" {
+		createReq.Vcs = data.VcsId.ValueString()
+	}
+	if !data.CreateRepository.IsNull() {
+		v := data.CreateRepository.ValueBool()
+		createReq.CreateRepository = &v
+	}
 	if !data.Tags.IsNull() && !data.Tags.IsUnknown() {
 		var tags map[string]string
 		diags = data.Tags.ElementsAs(ctx, &tags, false)
@@ -633,6 +677,19 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 
 	mapWorkspaceResponseToModel(ctx, &data, workspace)
 
+	// Repository state is reported on create only, so it's applied here rather than in the
+	// shared mapper -- a Read that nulled it would break the "inconsistent result after apply"
+	// contract for the computed repository_created.
+	data.RepositoryCreated = types.BoolValue(false)
+	if workspace.Repository != nil {
+		data.RepositoryCreated = types.BoolValue(workspace.Repository.Created)
+		if workspace.Repository.Warning != "" {
+			// A missing repo is deliberately not an error -- the workspace was created and the
+			// practitioner may be registering it ahead of the repo -- but it must not pass silently.
+			resp.Diagnostics.AddWarning("Repository not ready", workspace.Repository.Warning)
+		}
+	}
+
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
@@ -740,6 +797,9 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 	if !plan.WorkerPoolID.Equal(state.WorkerPoolID) {
 		updateReq.WorkerPool = plan.WorkerPoolID.ValueString()
+	}
+	if !plan.VcsId.Equal(state.VcsId) {
+		updateReq.Vcs = plan.VcsId.ValueString()
 	}
 	if !plan.Folder.Equal(state.Folder) {
 		updateReq.Folder = plan.Folder.ValueString()
@@ -1006,6 +1066,9 @@ func (r *WorkspaceResource) ImportState(ctx context.Context, req resource.Import
 	var data WorkspaceResourceModel
 	data.OrganizationName = types.StringValue(organizationName)
 	mapWorkspaceResponseToModel(ctx, &data, *workspace)
+	// An imported workspace was not created by us, so nothing was created on its behalf. Set it
+	// explicitly: the computed attribute has to hold a known value in state.
+	data.RepositoryCreated = types.BoolValue(false)
 
 	diags := resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
