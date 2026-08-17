@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -35,6 +36,7 @@ type WorkspaceIntegrationResourceModel struct {
 	WorkspaceName    types.String `tfsdk:"workspace_name"`
 	IntegrationID    types.String `tfsdk:"integration_id"`
 	RunAfterStage    types.String `tfsdk:"run_after_stage"`
+	Events           types.List   `tfsdk:"events"`
 	SlackChannels    types.List   `tfsdk:"slack_channels"`
 	SlackEnvChannels types.Map    `tfsdk:"slack_env_channels"`
 }
@@ -47,14 +49,14 @@ type WorkspaceIntegrationRef struct {
 type WorkspaceIntegrationAPIResponse struct {
 	ID               string                  `json:"id"`
 	Integration      WorkspaceIntegrationRef `json:"integration"`
-	RunAfterStage    string                  `json:"run_after_stage"`
+	Events           []string                `json:"events"`
 	SlackChannels    []string                `json:"slack_channels"`
 	SlackEnvChannels map[string]string       `json:"slack_env_channels"`
 }
 
 type WorkspaceIntegrationCreateRequest struct {
 	IntegrationID    string            `json:"integration_id"`
-	RunAfterStage    string            `json:"run_after_stage,omitempty"`
+	Events           []string          `json:"events,omitempty"`
 	SlackChannels    []string          `json:"slack_channels,omitempty"`
 	SlackEnvChannels map[string]string `json:"slack_env_channels,omitempty"`
 }
@@ -90,12 +92,27 @@ func (r *WorkspaceIntegrationResource) Schema(_ context.Context, _ resource.Sche
 				},
 			},
 			"run_after_stage": schema.StringAttribute{
-				Description: "The stage after which the integration runs. One of: init, debug, details, plan, apply, all.",
-				Optional:    true,
-				Computed:    true,
-				Default:     stringdefault.StaticString("apply"),
+				Description:        "Deprecated and ignored. Use `events` instead.",
+				DeprecationMessage: "run_after_stage is no longer used; integrations are now triggered by named events. Set `events` instead. This attribute is accepted but ignored, and will be removed in the next minor release.",
+				Optional:           true,
+				Computed:           true,
+				Default:            stringdefault.StaticString("apply"),
 				Validators: []validator.String{
 					stringvalidator.OneOf("init", "debug", "details", "plan", "apply", "all"),
+				},
+			},
+			"events": schema.ListAttribute{
+				Description: "Events that notify this integration, e.g. [\"run.applied\", \"agent.review_completed\"]. " +
+					"Fetch the full list from GET /api/organizations/{org}/integrations/event-types/. " +
+					"An empty list mutes the integration without detaching it. " +
+					"Omit to use the integration's organization-level defaults.",
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.List{
+					// The attach endpoint is the only way to change a subscription, and this
+					// resource has no Update, so a change re-attaches rather than erroring out.
+					listplanmodifier.RequiresReplace(),
 				},
 			},
 			"slack_channels": schema.ListAttribute{
@@ -125,7 +142,23 @@ func (r *WorkspaceIntegrationResource) Configure(_ context.Context, req resource
 func mapWorkspaceIntegrationToModel(_ context.Context, data *WorkspaceIntegrationResourceModel, wi WorkspaceIntegrationAPIResponse) {
 	data.ID = types.StringValue(wi.ID)
 	data.IntegrationID = types.StringValue(wi.Integration.ID)
-	data.RunAfterStage = types.StringValue(wi.RunAfterStage)
+
+	// run_after_stage is deprecated and no longer returned by the API. It is Computed with a
+	// default, so it must still hold a value -- but it must be read from configuration/state, never
+	// from the response, or every apply would report an inconsistent result.
+	if data.RunAfterStage.IsNull() || data.RunAfterStage.IsUnknown() {
+		data.RunAfterStage = types.StringValue("apply")
+	}
+
+	events := wi.Events
+	if events == nil {
+		events = []string{}
+	}
+	eventVals := make([]attr.Value, len(events))
+	for i, e := range events {
+		eventVals[i] = types.StringValue(e)
+	}
+	data.Events = types.ListValueMust(types.StringType, eventVals)
 
 	channels := wi.SlackChannels
 	if channels == nil {
@@ -158,7 +191,16 @@ func (r *WorkspaceIntegrationResource) Create(ctx context.Context, req resource.
 
 	createReq := WorkspaceIntegrationCreateRequest{
 		IntegrationID: data.IntegrationID.ValueString(),
-		RunAfterStage: data.RunAfterStage.ValueString(),
+	}
+
+	if !data.Events.IsNull() && !data.Events.IsUnknown() {
+		var events []string
+		diags = data.Events.ElementsAs(ctx, &events, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		createReq.Events = events
 	}
 
 	if !data.SlackChannels.IsNull() && !data.SlackChannels.IsUnknown() {
