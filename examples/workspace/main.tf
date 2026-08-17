@@ -32,9 +32,27 @@ resource "infradots_workspace" "example" {
   ]
 }
 
+# A workspace whose repository does not exist yet: infradots creates it on the connected VCS
+# rather than leaving a workspace that looks fine and fails on its first clone. Without
+# create_repository a missing repository is reported as a warning and the workspace is still made.
+resource "infradots_workspace" "bootstrapped" {
+  organization_name = infradots_organization.example.name
+  name              = "clients-poc-environments"
+  source            = "example/clients-poc-environments"
+  branch            = "main"
+  terraform_version = "1.5.0"
+
+  vcs_id            = "00000000-0000-0000-0000-000000000000"
+  create_repository = true
+}
+
 # Output the workspace details
 output "workspace_id" {
   value = infradots_workspace.example.id
+}
+
+output "bootstrapped_repository_created" {
+  value = infradots_workspace.bootstrapped.repository_created
 }
 
 output "workspace_created_at" {
