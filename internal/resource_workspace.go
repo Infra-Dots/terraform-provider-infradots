@@ -45,6 +45,7 @@ type WorkspaceResourceModel struct {
 	IacType               types.String `tfsdk:"iac_type"`
 	DefaultJobAction      types.String `tfsdk:"default_job_action"`
 	WorkerPoolID          types.String `tfsdk:"worker_pool_id"`
+	AgentPoolID           types.String `tfsdk:"agent_pool_id"`
 	Folder                types.String `tfsdk:"folder"`
 	TriggerPatterns       types.List   `tfsdk:"trigger_patterns"`
 	ExecutionMode         types.String `tfsdk:"execution_mode"`
@@ -97,6 +98,7 @@ type WorkspaceAPIResponse struct {
 	IacType               string           `json:"iac_type"`
 	DefaultJobAction      string           `json:"default_job_action"`
 	WorkerPool            *string          `json:"worker_pool"`
+	AgentPool             *string          `json:"agent_pool"`
 	Folder                string           `json:"folder"`
 	TriggerPatterns       []TriggerPattern `json:"trigger_patterns"`
 	ExecutionMode         string           `json:"execution_mode"`
@@ -124,6 +126,7 @@ type WorkspaceCreateRequest struct {
 	IacType               string           `json:"iac_type,omitempty"`
 	DefaultJobAction      string           `json:"default_job_action,omitempty"`
 	WorkerPool            string           `json:"worker_pool,omitempty"`
+	AgentPool             string           `json:"agent_pool,omitempty"`
 	Folder                string           `json:"folder,omitempty"`
 	TriggerPatterns       []TriggerPattern `json:"trigger_patterns,omitempty"`
 	ExecutionMode         string           `json:"execution_mode,omitempty"`
@@ -152,15 +155,17 @@ type RepositoryStatus struct {
 }
 
 type WorkspaceUpdateRequest struct {
-	Name                  string            `json:"name,omitempty"`
-	Description           string            `json:"description,omitempty"`
-	Source                string            `json:"source,omitempty"`
-	Branch                string            `json:"branch,omitempty"`
-	TerraformVersion      string            `json:"terraform_version,omitempty"`
-	AutoApply             *bool             `json:"auto_apply,omitempty"`
-	IacType               string            `json:"iac_type,omitempty"`
-	DefaultJobAction      string            `json:"default_job_action,omitempty"`
-	WorkerPool            string            `json:"worker_pool,omitempty"`
+	Name             string `json:"name,omitempty"`
+	Description      string `json:"description,omitempty"`
+	Source           string `json:"source,omitempty"`
+	Branch           string `json:"branch,omitempty"`
+	TerraformVersion string `json:"terraform_version,omitempty"`
+	AutoApply        *bool  `json:"auto_apply,omitempty"`
+	IacType          string `json:"iac_type,omitempty"`
+	DefaultJobAction string `json:"default_job_action,omitempty"`
+	// Pools are clearable: nil leaves the pool as is, a pointer to nil sends null (unassign it).
+	WorkerPool            **string          `json:"worker_pool,omitempty"`
+	AgentPool             **string          `json:"agent_pool,omitempty"`
 	Folder                string            `json:"folder,omitempty"`
 	TriggerPatterns       *[]TriggerPattern `json:"trigger_patterns,omitempty"`
 	ExecutionMode         string            `json:"execution_mode,omitempty"`
@@ -278,8 +283,15 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"worker_pool_id": schema.StringAttribute{
-				Description: "ID of the worker pool to assign to this workspace.",
-				Optional:    true,
+				Description: "ID of the executor pool that runs this workspace's Terraform/OpenTofu jobs. Unset: " +
+					"InfraDots' workers.",
+				Optional: true,
+			},
+			"agent_pool_id": schema.StringAttribute{
+				Description: "ID of the agent pool (`infradots_worker_pool` with `kind = \"agent\"`) that runs this " +
+					"workspace's AI reviews and implementations on your own runners. Unset: the organization's agent " +
+					"pool, if any (`infradots_organization_agent_pool`), otherwise InfraDots.",
+				Optional: true,
 			},
 			"folder": schema.StringAttribute{
 				Description: "The subfolder within the source repository.",
@@ -447,6 +459,17 @@ func vcsToObject(vcs *VCSAPIResponse) types.Object {
 	)
 }
 
+// nullableID is an id for a PATCH that can also clear it: the id, or -- when the configuration no longer
+// sets it -- a pointer to nil, which marshals to JSON null. (A nil **string is left out entirely.)
+func nullableID(v types.String) **string {
+	var id *string
+	if !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
+		value := v.ValueString()
+		id = &value
+	}
+	return &id
+}
+
 func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceModel, workspace WorkspaceAPIResponse) {
 	data.ID = types.StringValue(workspace.ID)
 	data.Name = types.StringValue(workspace.Name)
@@ -465,9 +488,8 @@ func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceMod
 	if workspace.DefaultJobAction != "" {
 		data.DefaultJobAction = types.StringValue(workspace.DefaultJobAction)
 	}
-	if workspace.WorkerPool != nil {
-		data.WorkerPoolID = types.StringValue(*workspace.WorkerPool)
-	}
+	data.WorkerPoolID = types.StringPointerValue(workspace.WorkerPool)
+	data.AgentPoolID = types.StringPointerValue(workspace.AgentPool)
 	if workspace.Folder != "" {
 		data.Folder = types.StringValue(workspace.Folder)
 	}
@@ -553,6 +575,9 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	if !data.WorkerPoolID.IsNull() && data.WorkerPoolID.ValueString() != "" {
 		createReq.WorkerPool = data.WorkerPoolID.ValueString()
+	}
+	if !data.AgentPoolID.IsNull() && data.AgentPoolID.ValueString() != "" {
+		createReq.AgentPool = data.AgentPoolID.ValueString()
 	}
 	if !data.VcsId.IsNull() && data.VcsId.ValueString() != "" {
 		createReq.Vcs = data.VcsId.ValueString()
@@ -796,7 +821,10 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 		updateReq.DefaultJobAction = plan.DefaultJobAction.ValueString()
 	}
 	if !plan.WorkerPoolID.Equal(state.WorkerPoolID) {
-		updateReq.WorkerPool = plan.WorkerPoolID.ValueString()
+		updateReq.WorkerPool = nullableID(plan.WorkerPoolID)
+	}
+	if !plan.AgentPoolID.Equal(state.AgentPoolID) {
+		updateReq.AgentPool = nullableID(plan.AgentPoolID)
 	}
 	if !plan.VcsId.Equal(state.VcsId) {
 		updateReq.Vcs = plan.VcsId.ValueString()

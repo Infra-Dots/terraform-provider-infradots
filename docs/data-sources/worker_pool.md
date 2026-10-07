@@ -29,5 +29,6 @@ data "infradots_worker_pool_data" "by_id" {
 * `id` - The unique ID of the worker pool.
 * `organization_name` - The name of the organization the worker pool belongs to.
 * `name` - The name of the worker pool.
+* `kind` - What the pool's runners run: `executor` or `agent`.
 * `restrict_to_assigned` - Whether this pool is restricted to assigned workspaces.
 * `workers_count` - Number of workers currently registered in this pool.

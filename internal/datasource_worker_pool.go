@@ -26,6 +26,7 @@ type WorkerPoolDataSourceModel struct {
 	ID                 types.String `tfsdk:"id"`
 	OrganizationName   types.String `tfsdk:"organization_name"`
 	Name               types.String `tfsdk:"name"`
+	Kind               types.String `tfsdk:"kind"`
 	RestrictToAssigned types.Bool   `tfsdk:"restrict_to_assigned"`
 	WorkersCount       types.Int64  `tfsdk:"workers_count"`
 }
@@ -50,6 +51,10 @@ func (d *WorkerPoolDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"name": schema.StringAttribute{
 				Description: "The name of the worker pool.",
 				Optional:    true,
+				Computed:    true,
+			},
+			"kind": schema.StringAttribute{
+				Description: "What the pool's members run: `executor` (Terraform/OpenTofu jobs) or `agent` (AI agent runs).",
 				Computed:    true,
 			},
 			"restrict_to_assigned": schema.BoolAttribute{
@@ -126,6 +131,7 @@ func (d *WorkerPoolDataSource) Read(ctx context.Context, req datasource.ReadRequ
 
 		data.ID = types.StringValue(pool.ID)
 		data.Name = types.StringValue(pool.Name)
+		data.Kind = types.StringValue(pool.kindOrDefault())
 		data.RestrictToAssigned = types.BoolValue(pool.RestrictToAssigned)
 		data.WorkersCount = types.Int64Value(int64(pool.WorkersCount))
 	} else if !data.Name.IsNull() && data.Name.ValueString() != "" {
@@ -169,6 +175,7 @@ func (d *WorkerPoolDataSource) Read(ctx context.Context, req datasource.ReadRequ
 			if pool.Name == data.Name.ValueString() {
 				data.ID = types.StringValue(pool.ID)
 				data.Name = types.StringValue(pool.Name)
+				data.Kind = types.StringValue(pool.kindOrDefault())
 				data.RestrictToAssigned = types.BoolValue(pool.RestrictToAssigned)
 				data.WorkersCount = types.Int64Value(int64(pool.WorkersCount))
 				found = true

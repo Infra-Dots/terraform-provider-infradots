@@ -68,6 +68,7 @@ resource "infradots_workspace" "test_workspace_b" {
   branch            = "main"
   terraform_version = "1.5.0"
   execution_mode    = "Remote"
+  agent_pool_id     = infradots_worker_pool.test_agent_pool.id
 }
 
 # ──────────────────────────────────────────────
@@ -140,6 +141,32 @@ data "infradots_worker_pool_data" "lookup_pool" {
   name              = infradots_worker_pool.test_pool.name
 
   depends_on = [infradots_worker_pool.test_pool]
+}
+
+# An agent pool: assigned to a workspace, and as the organization's default.
+resource "infradots_worker_pool" "test_agent_pool" {
+  organization_name = var.organization_name
+  name              = "test-agent-pool-${local.run_id}"
+  kind              = "agent"
+}
+
+data "infradots_worker_pool_data" "lookup_agent_pool" {
+  organization_name = var.organization_name
+  name              = infradots_worker_pool.test_agent_pool.name
+
+  depends_on = [infradots_worker_pool.test_agent_pool]
+}
+
+resource "infradots_organization_agent_pool" "test_org_agent_pool" {
+  organization_name = var.organization_name
+  agent_pool_id     = infradots_worker_pool.test_agent_pool.id
+}
+
+data "infradots_workspace_data" "lookup_workspace_b" {
+  organization_name = var.organization_name
+  name              = infradots_workspace.test_workspace_b.name
+
+  depends_on = [infradots_workspace.test_workspace_b]
 }
 
 # ──────────────────────────────────────────────
@@ -276,4 +303,19 @@ output "agent_skill_id" {
 
 output "agent_skill_is_github_sourced" {
   value = infradots_agent_skill.test_skill.is_github_sourced
+}
+
+output "pool_kinds_from_data" {
+  value = {
+    executor = data.infradots_worker_pool_data.lookup_pool.kind
+    agent    = data.infradots_worker_pool_data.lookup_agent_pool.kind
+  }
+}
+
+output "workspace_b_agent_pool_matches" {
+  value = data.infradots_workspace_data.lookup_workspace_b.agent_pool_id == infradots_worker_pool.test_agent_pool.id
+}
+
+output "org_agent_pool_id" {
+  value = infradots_organization_agent_pool.test_org_agent_pool.agent_pool_id
 }

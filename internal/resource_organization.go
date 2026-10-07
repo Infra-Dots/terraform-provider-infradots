@@ -61,6 +61,8 @@ type OrganizationAPIResponse struct {
 	AutoImplementChanges             bool           `json:"auto_implement_changes"`
 	ApprovalReminderIntervalHours    *int64         `json:"approval_reminder_interval_hours"`
 	WorkspaceInterconnectionsEnabled bool           `json:"workspace_interconnections_enabled"`
+	// Managed by infradots_organization_agent_pool; read by the organization data source.
+	AgentPool *string `json:"agent_pool"`
 }
 
 type Member struct {

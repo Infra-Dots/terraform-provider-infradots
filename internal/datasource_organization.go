@@ -35,6 +35,7 @@ type OrganizationDataSourceModel struct {
 	UpdatedAt     types.String `tfsdk:"updated_at"`
 	ExecutionMode types.String `tfsdk:"execution_mode"`
 	AgentsEnabled types.Bool   `tfsdk:"agents_enabled"`
+	AgentPoolID   types.String `tfsdk:"agent_pool_id"`
 	Members       types.List   `tfsdk:"members"`
 	Teams         types.List   `tfsdk:"teams"`
 }
@@ -89,6 +90,10 @@ func (d *OrganizationDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			},
 			"agents_enabled": schema.BoolAttribute{
 				Description: "Whether agents are enabled for the organization.",
+				Computed:    true,
+			},
+			"agent_pool_id": schema.StringAttribute{
+				Description: "ID of the organization's agent pool, or null (agent runs run on InfraDots).",
 				Computed:    true,
 			},
 			"members": schema.ListNestedAttribute{
@@ -248,6 +253,7 @@ func (d *OrganizationDataSource) mapOrganizationToModel(ctx context.Context, dat
 	data.UpdatedAt = types.StringValue(apiResp.UpdatedAt.Format(time.RFC3339))
 	data.ExecutionMode = types.StringValue(apiResp.ExecutionMode)
 	data.AgentsEnabled = types.BoolValue(apiResp.AgentsEnabled)
+	data.AgentPoolID = types.StringPointerValue(apiResp.AgentPool)
 
 	// Map members
 	members := make([]OrganizationMemberModel, 0, len(apiResp.Members))

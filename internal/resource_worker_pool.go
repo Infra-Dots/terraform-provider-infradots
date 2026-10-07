@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -32,20 +33,38 @@ type WorkerPoolResourceModel struct {
 	ID                 types.String `tfsdk:"id"`
 	OrganizationName   types.String `tfsdk:"organization_name"`
 	Name               types.String `tfsdk:"name"`
+	Kind               types.String `tfsdk:"kind"`
 	RegistrationToken  types.String `tfsdk:"registration_token"`
 	RestrictToAssigned types.Bool   `tfsdk:"restrict_to_assigned"`
 }
 
+// Pool kinds: an executor pool runs Terraform/OpenTofu jobs, an agent pool runs AI agent runs. Fixed at
+// creation -- the API refuses to change it, so a change replaces the pool.
+const (
+	WorkerPoolKindExecutor = "executor"
+	WorkerPoolKindAgent    = "agent"
+)
+
 type WorkerPoolAPIResponse struct {
 	ID                 string `json:"id"`
 	Name               string `json:"name"`
+	Kind               string `json:"kind"`
 	RegistrationToken  string `json:"registration_token,omitempty"`
 	WorkersCount       int    `json:"workers_count"`
 	RestrictToAssigned bool   `json:"restrict_to_assigned"`
 }
 
+// kindOrDefault is the pool's kind; responses from before pools had kinds carry none.
+func (p WorkerPoolAPIResponse) kindOrDefault() string {
+	if p.Kind == "" {
+		return WorkerPoolKindExecutor
+	}
+	return p.Kind
+}
+
 type WorkerPoolCreateRequest struct {
 	Name               string `json:"name"`
+	Kind               string `json:"kind,omitempty"`
 	RestrictToAssigned bool   `json:"restrict_to_assigned"`
 }
 
@@ -84,6 +103,19 @@ func (r *WorkerPoolResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Description: "The name of the worker pool.",
 				Required:    true,
 			},
+			"kind": schema.StringAttribute{
+				Description: "What the pool's members run: `executor` (Terraform/OpenTofu jobs, the default) or `agent` " +
+					"(AI reviews and implementations, run by idp-agent runners). Changing it replaces the pool.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString(WorkerPoolKindExecutor),
+				Validators: []validator.String{
+					stringvalidator.OneOf(WorkerPoolKindExecutor, WorkerPoolKindAgent),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"registration_token": schema.StringAttribute{
 				Description: "The registration token for workers to join this pool. Only available after creation.",
 				Computed:    true,
@@ -117,6 +149,7 @@ func (r *WorkerPoolResource) Create(ctx context.Context, req resource.CreateRequ
 
 	createReq := WorkerPoolCreateRequest{
 		Name:               data.Name.ValueString(),
+		Kind:               data.Kind.ValueString(),
 		RestrictToAssigned: data.RestrictToAssigned.ValueBool(),
 	}
 
@@ -168,6 +201,7 @@ func (r *WorkerPoolResource) Create(ctx context.Context, req resource.CreateRequ
 
 	data.ID = types.StringValue(pool.ID)
 	data.Name = types.StringValue(pool.Name)
+	data.Kind = types.StringValue(pool.kindOrDefault())
 	data.RestrictToAssigned = types.BoolValue(pool.RestrictToAssigned)
 	if pool.RegistrationToken != "" {
 		data.RegistrationToken = types.StringValue(pool.RegistrationToken)
@@ -232,6 +266,7 @@ func (r *WorkerPoolResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	data.ID = types.StringValue(pool.ID)
 	data.Name = types.StringValue(pool.Name)
+	data.Kind = types.StringValue(pool.kindOrDefault())
 	data.RestrictToAssigned = types.BoolValue(pool.RestrictToAssigned)
 	// registration_token is not returned on read, keep existing value
 
@@ -312,6 +347,7 @@ func (r *WorkerPoolResource) Update(ctx context.Context, req resource.UpdateRequ
 
 	plan.ID = types.StringValue(pool.ID)
 	plan.Name = types.StringValue(pool.Name)
+	plan.Kind = types.StringValue(pool.kindOrDefault())
 	plan.RestrictToAssigned = types.BoolValue(pool.RestrictToAssigned)
 	// Preserve registration_token from state
 	plan.RegistrationToken = state.RegistrationToken
@@ -437,6 +473,7 @@ func (r *WorkerPoolResource) ImportState(ctx context.Context, req resource.Impor
 	data.ID = types.StringValue(found.ID)
 	data.OrganizationName = types.StringValue(organizationName)
 	data.Name = types.StringValue(found.Name)
+	data.Kind = types.StringValue(found.kindOrDefault())
 	data.RestrictToAssigned = types.BoolValue(found.RestrictToAssigned)
 	data.RegistrationToken = types.StringValue("")
 
