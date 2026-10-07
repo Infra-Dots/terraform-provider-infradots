@@ -8,10 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -199,4 +202,36 @@ func TestOrganizationAgentPool_ReportsARefusal(t *testing.T) {
 	r.Create(ctx, req, &resp)
 	require.True(t, resp.Diagnostics.HasError())
 	assert.Contains(t, resp.Diagnostics.Errors()[0].Detail(), "Not an agent pool.")
+}
+
+func TestWorkspaceDataSource_ReadsByNameWithAFullConfiguration(t *testing.T) {
+	transport := &recordingTransport{respond: func(*http.Request) (int, string) {
+		return http.StatusOK, `[{"id": "ws-1", "name": "app", "agent_pool": "pool-1", "worker_pool": null,
+			"created_at": "2026-10-07T10:00:00Z", "updated_at": "2026-10-07T10:00:00Z"}]`
+	}}
+	d := &WorkspaceDataSource{provider: testProvider(transport)}
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	d.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+
+	// What Terraform hands a data source: every schema attribute, unset ones null.
+	config := tfsdk.Config{Schema: schemaResp.Schema, Raw: tftypes.NewValue(schemaResp.Schema.Type().TerraformType(ctx), nil)}
+	var model WorkspaceDataSourceModel
+	model.OrganizationName = types.StringValue("acme")
+	model.Name = types.StringValue("app")
+	model.ID = types.StringNull()
+	model.VCS = types.ObjectNull(schemaResp.Schema.Attributes["vcs"].GetType().(basetypes.ObjectType).AttrTypes)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	require.Empty(t, state.Set(ctx, &model))
+	config.Raw = state.Raw
+
+	resp := datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	d.Read(ctx, datasource.ReadRequest{Config: config}, &resp)
+	require.False(t, resp.Diagnostics.HasError(), resp.Diagnostics)
+
+	var got WorkspaceDataSourceModel
+	require.Empty(t, resp.State.Get(ctx, &got))
+	assert.Equal(t, "ws-1", got.ID.ValueString())
+	assert.Equal(t, "pool-1", got.AgentPoolID.ValueString())
+	assert.True(t, got.WorkerPoolID.IsNull())
 }

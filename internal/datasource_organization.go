@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -147,8 +148,10 @@ func (d *OrganizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	var data OrganizationDataSourceModel
 	var filter OrganizationDataSourceFilterModel
 
-	// Read input configuration into filter
-	resp.Diagnostics.Append(req.Config.Get(ctx, &filter)...)
+	// Read the filter attributes one by one: the configuration has every attribute of the schema, which
+	// the filter struct doesn't (a whole-config Get into it fails with "mismatch between struct and object").
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("id"), &filter.ID)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("name"), &filter.Name)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
