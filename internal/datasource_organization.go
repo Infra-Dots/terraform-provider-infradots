@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -35,6 +36,7 @@ type OrganizationDataSourceModel struct {
 	UpdatedAt     types.String `tfsdk:"updated_at"`
 	ExecutionMode types.String `tfsdk:"execution_mode"`
 	AgentsEnabled types.Bool   `tfsdk:"agents_enabled"`
+	AgentPoolID   types.String `tfsdk:"agent_pool_id"`
 	Members       types.List   `tfsdk:"members"`
 	Teams         types.List   `tfsdk:"teams"`
 }
@@ -91,6 +93,10 @@ func (d *OrganizationDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 				Description: "Whether agents are enabled for the organization.",
 				Computed:    true,
 			},
+			"agent_pool_id": schema.StringAttribute{
+				Description: "ID of the organization's agent pool, or null (agent runs run on InfraDots).",
+				Computed:    true,
+			},
 			"members": schema.ListNestedAttribute{
 				Description: "The members of the organization.",
 				Computed:    true,
@@ -142,8 +148,10 @@ func (d *OrganizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	var data OrganizationDataSourceModel
 	var filter OrganizationDataSourceFilterModel
 
-	// Read input configuration into filter
-	resp.Diagnostics.Append(req.Config.Get(ctx, &filter)...)
+	// Read the filter attributes one by one: the configuration has every attribute of the schema, which
+	// the filter struct doesn't (a whole-config Get into it fails with "mismatch between struct and object").
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("id"), &filter.ID)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("name"), &filter.Name)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -248,6 +256,7 @@ func (d *OrganizationDataSource) mapOrganizationToModel(ctx context.Context, dat
 	data.UpdatedAt = types.StringValue(apiResp.UpdatedAt.Format(time.RFC3339))
 	data.ExecutionMode = types.StringValue(apiResp.ExecutionMode)
 	data.AgentsEnabled = types.BoolValue(apiResp.AgentsEnabled)
+	data.AgentPoolID = types.StringPointerValue(apiResp.AgentPool)
 
 	// Map members
 	members := make([]OrganizationMemberModel, 0, len(apiResp.Members))

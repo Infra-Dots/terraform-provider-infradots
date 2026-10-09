@@ -44,6 +44,8 @@ resource "infradots_variable" "example" {
 * `terraform_version` - Terraform version used.
 * `created_at` - The timestamp when the workspace was created.
 * `updated_at` - The timestamp when the workspace was last updated.
+* `worker_pool_id` - ID of the executor pool assigned to the workspace, or null (InfraDots' workers).
+* `agent_pool_id` - ID of the agent pool assigned to the workspace, or null (the organization's).
 * `vcs` - VCS connection details associated with this workspace. This is a nested object with the following attributes:
   * `id` - The VCS unique ID (UUID).
   * `name` - The name of the VCS connection.

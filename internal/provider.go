@@ -101,6 +101,7 @@ func (p *InfradotsProvider) Configure(ctx context.Context, req provider.Configur
 func (p *InfradotsProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewOrganizationResource,
+		NewOrganizationAgentPoolResource,
 		NewWorkspaceResource,
 		NewVariableResource,
 		NewVCSResource,

@@ -38,6 +38,7 @@ resource "infradots_workspace" "example" {
 * `updated_at` - The timestamp when the organization was last updated.
 * `execution_mode` - The execution mode for the organization (Remote, Local, etc.).
 * `agents_enabled` - Whether agents are enabled for the organization.
+* `agent_pool_id` - ID of the organization's agent pool, or null (agent runs run on InfraDots).
 * `members` - A list of members in the organization. Each member has the following attributes:
   * `email` - The email address of the member.
 * `teams` - A list of teams in the organization. Each team has the following attributes:

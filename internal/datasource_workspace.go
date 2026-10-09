@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -35,6 +36,8 @@ type WorkspaceDataSourceModel struct {
 	CreatedAt        types.String `tfsdk:"created_at"`
 	UpdatedAt        types.String `tfsdk:"updated_at"`
 	VCS              types.Object `tfsdk:"vcs"`
+	WorkerPoolID     types.String `tfsdk:"worker_pool_id"`
+	AgentPoolID      types.String `tfsdk:"agent_pool_id"`
 }
 
 type WorkspaceDataSourceFilterModel struct {
@@ -54,6 +57,14 @@ func (d *WorkspaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			"id": schema.StringAttribute{
 				Description: "The unique ID of the workspace.",
 				Optional:    true,
+				Computed:    true,
+			},
+			"worker_pool_id": schema.StringAttribute{
+				Description: "ID of the executor pool assigned to the workspace, or null (InfraDots' workers).",
+				Computed:    true,
+			},
+			"agent_pool_id": schema.StringAttribute{
+				Description: "ID of the agent pool assigned to the workspace, or null (the organization's).",
 				Computed:    true,
 			},
 			"organization_name": schema.StringAttribute{
@@ -185,8 +196,11 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 	var data WorkspaceDataSourceModel
 	var filter WorkspaceDataSourceFilterModel
 
-	// Read input configuration into filter
-	resp.Diagnostics.Append(req.Config.Get(ctx, &filter)...)
+	// Read the filter attributes one by one: the configuration has every attribute of the schema, which
+	// the filter struct doesn't (a whole-config Get into it fails with "mismatch between struct and object").
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("id"), &filter.ID)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("organization_name"), &filter.OrganizationName)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("name"), &filter.Name)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -276,6 +290,8 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 		data.CreatedAt = types.StringValue(apiResp.CreatedAt.Format(time.RFC3339))
 		data.UpdatedAt = types.StringValue(apiResp.UpdatedAt.Format(time.RFC3339))
 		data.VCS = vcsToObjectDataSource(apiResp.VCS)
+		data.WorkerPoolID = types.StringPointerValue(apiResp.WorkerPool)
+		data.AgentPoolID = types.StringPointerValue(apiResp.AgentPool)
 	} else {
 		// List of workspaces, filter by name
 		var apiRespList []WorkspaceAPIResponse
@@ -299,6 +315,8 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 				data.CreatedAt = types.StringValue(workspace.CreatedAt.Format(time.RFC3339))
 				data.UpdatedAt = types.StringValue(workspace.UpdatedAt.Format(time.RFC3339))
 				data.VCS = vcsToObjectDataSource(workspace.VCS)
+				data.WorkerPoolID = types.StringPointerValue(workspace.WorkerPool)
+				data.AgentPoolID = types.StringPointerValue(workspace.AgentPool)
 				found = true
 				break
 			}
