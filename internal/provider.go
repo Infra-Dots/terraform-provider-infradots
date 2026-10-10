@@ -115,6 +115,7 @@ func (p *InfradotsProvider) Resources(_ context.Context) []func() resource.Resou
 		NewIntegrationResource,
 		NewWorkspaceIntegrationResource,
 		NewModelProviderResource,
+		NewSshKeyResource,
 		NewWorkspaceScheduleResource,
 		NewAgentSkillResource,
 	}
@@ -123,6 +124,7 @@ func (p *InfradotsProvider) Resources(_ context.Context) []func() resource.Resou
 // DataSources returns the list of data source implementations.
 func (p *InfradotsProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		NewSshKeyDataSource,
 		NewOrganizationDataSource,
 		NewWorkspaceDataSource,
 		NewVCSDataSource,

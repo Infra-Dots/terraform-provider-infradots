@@ -38,6 +38,7 @@ type WorkspaceDataSourceModel struct {
 	VCS              types.Object `tfsdk:"vcs"`
 	WorkerPoolID     types.String `tfsdk:"worker_pool_id"`
 	AgentPoolID      types.String `tfsdk:"agent_pool_id"`
+	SshKeyID         types.String `tfsdk:"ssh_key_id"`
 }
 
 type WorkspaceDataSourceFilterModel struct {
@@ -65,6 +66,10 @@ func (d *WorkspaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			},
 			"agent_pool_id": schema.StringAttribute{
 				Description: "ID of the agent pool assigned to the workspace, or null (the organization's).",
+				Computed:    true,
+			},
+			"ssh_key_id": schema.StringAttribute{
+				Description: "ID of the SSH key the workspace's module sources over SSH use, or null.",
 				Computed:    true,
 			},
 			"organization_name": schema.StringAttribute{
@@ -292,6 +297,7 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 		data.VCS = vcsToObjectDataSource(apiResp.VCS)
 		data.WorkerPoolID = types.StringPointerValue(apiResp.WorkerPool)
 		data.AgentPoolID = types.StringPointerValue(apiResp.AgentPool)
+		data.SshKeyID = types.StringPointerValue(apiResp.SshKey)
 	} else {
 		// List of workspaces, filter by name
 		var apiRespList []WorkspaceAPIResponse
@@ -317,6 +323,7 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 				data.VCS = vcsToObjectDataSource(workspace.VCS)
 				data.WorkerPoolID = types.StringPointerValue(workspace.WorkerPool)
 				data.AgentPoolID = types.StringPointerValue(workspace.AgentPool)
+				data.SshKeyID = types.StringPointerValue(workspace.SshKey)
 				found = true
 				break
 			}
