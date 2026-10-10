@@ -46,6 +46,7 @@ resource "infradots_variable" "example" {
 * `updated_at` - The timestamp when the workspace was last updated.
 * `worker_pool_id` - ID of the executor pool assigned to the workspace, or null (InfraDots' workers).
 * `agent_pool_id` - ID of the agent pool assigned to the workspace, or null (the organization's).
+* `ssh_key_id` - ID of the SSH key the workspace's module sources over SSH use, or null.
 * `vcs` - VCS connection details associated with this workspace. This is a nested object with the following attributes:
   * `id` - The VCS unique ID (UUID).
   * `name` - The name of the VCS connection.

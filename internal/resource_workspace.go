@@ -46,6 +46,7 @@ type WorkspaceResourceModel struct {
 	DefaultJobAction      types.String `tfsdk:"default_job_action"`
 	WorkerPoolID          types.String `tfsdk:"worker_pool_id"`
 	AgentPoolID           types.String `tfsdk:"agent_pool_id"`
+	SshKeyID              types.String `tfsdk:"ssh_key_id"`
 	Folder                types.String `tfsdk:"folder"`
 	TriggerPatterns       types.List   `tfsdk:"trigger_patterns"`
 	ExecutionMode         types.String `tfsdk:"execution_mode"`
@@ -99,6 +100,7 @@ type WorkspaceAPIResponse struct {
 	DefaultJobAction      string           `json:"default_job_action"`
 	WorkerPool            *string          `json:"worker_pool"`
 	AgentPool             *string          `json:"agent_pool"`
+	SshKey                *string          `json:"ssh_key"`
 	Folder                string           `json:"folder"`
 	TriggerPatterns       []TriggerPattern `json:"trigger_patterns"`
 	ExecutionMode         string           `json:"execution_mode"`
@@ -127,6 +129,7 @@ type WorkspaceCreateRequest struct {
 	DefaultJobAction      string           `json:"default_job_action,omitempty"`
 	WorkerPool            string           `json:"worker_pool,omitempty"`
 	AgentPool             string           `json:"agent_pool,omitempty"`
+	SshKey                string           `json:"ssh_key,omitempty"`
 	Folder                string           `json:"folder,omitempty"`
 	TriggerPatterns       []TriggerPattern `json:"trigger_patterns,omitempty"`
 	ExecutionMode         string           `json:"execution_mode,omitempty"`
@@ -166,6 +169,7 @@ type WorkspaceUpdateRequest struct {
 	// Pools are clearable: nil leaves the pool as is, a pointer to nil sends null (unassign it).
 	WorkerPool            **string          `json:"worker_pool,omitempty"`
 	AgentPool             **string          `json:"agent_pool,omitempty"`
+	SshKey                **string          `json:"ssh_key,omitempty"`
 	Folder                string            `json:"folder,omitempty"`
 	TriggerPatterns       *[]TriggerPattern `json:"trigger_patterns,omitempty"`
 	ExecutionMode         string            `json:"execution_mode,omitempty"`
@@ -291,6 +295,11 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "ID of the agent pool (`infradots_worker_pool` with `kind = \"agent\"`) that runs this " +
 					"workspace's AI reviews and implementations on your own runners. Unset: the organization's agent " +
 					"pool, if any (`infradots_organization_agent_pool`), otherwise InfraDots.",
+				Optional: true,
+			},
+			"ssh_key_id": schema.StringAttribute{
+				Description: "ID of the organization's SSH key (`infradots_ssh_key`) the workspace's module sources " +
+					"fetched over SSH use (`git::ssh://...`, `git@github.com:...`). Unset: none.",
 				Optional: true,
 			},
 			"folder": schema.StringAttribute{
@@ -490,6 +499,7 @@ func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceMod
 	}
 	data.WorkerPoolID = types.StringPointerValue(workspace.WorkerPool)
 	data.AgentPoolID = types.StringPointerValue(workspace.AgentPool)
+	data.SshKeyID = types.StringPointerValue(workspace.SshKey)
 	if workspace.Folder != "" {
 		data.Folder = types.StringValue(workspace.Folder)
 	}
@@ -578,6 +588,9 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	if !data.AgentPoolID.IsNull() && data.AgentPoolID.ValueString() != "" {
 		createReq.AgentPool = data.AgentPoolID.ValueString()
+	}
+	if !data.SshKeyID.IsNull() && data.SshKeyID.ValueString() != "" {
+		createReq.SshKey = data.SshKeyID.ValueString()
 	}
 	if !data.VcsId.IsNull() && data.VcsId.ValueString() != "" {
 		createReq.Vcs = data.VcsId.ValueString()
@@ -825,6 +838,9 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 	if !plan.AgentPoolID.Equal(state.AgentPoolID) {
 		updateReq.AgentPool = nullableID(plan.AgentPoolID)
+	}
+	if !plan.SshKeyID.Equal(state.SshKeyID) {
+		updateReq.SshKey = nullableID(plan.SshKeyID)
 	}
 	if !plan.VcsId.Equal(state.VcsId) {
 		updateReq.Vcs = plan.VcsId.ValueString()
