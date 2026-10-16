@@ -28,15 +28,16 @@ func NewIntegrationResource() resource.Resource {
 }
 
 type IntegrationResourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	OrganizationName types.String `tfsdk:"organization_name"`
-	Name             types.String `tfsdk:"name"`
-	Type             types.String `tfsdk:"type"`
-	APIURL           types.String `tfsdk:"api_url"`
-	APIKey           types.String `tfsdk:"api_key"`
-	Description      types.String `tfsdk:"description"`
-	CreatedAt        types.String `tfsdk:"created_at"`
-	UpdatedAt        types.String `tfsdk:"updated_at"`
+	ID                  types.String `tfsdk:"id"`
+	OrganizationName    types.String `tfsdk:"organization_name"`
+	Name                types.String `tfsdk:"name"`
+	Type                types.String `tfsdk:"type"`
+	APIURL              types.String `tfsdk:"api_url"`
+	APIKey              types.String `tfsdk:"api_key"`
+	Description         types.String `tfsdk:"description"`
+	ThreadRelatedEvents types.Bool   `tfsdk:"thread_related_events"`
+	CreatedAt           types.String `tfsdk:"created_at"`
+	UpdatedAt           types.String `tfsdk:"updated_at"`
 }
 
 type IntegrationAPIResponse struct {
@@ -55,13 +56,17 @@ type IntegrationCreateRequest struct {
 	APIURL      string `json:"api_url,omitempty"`
 	APIKey      string `json:"api_key,omitempty"`
 	Description string `json:"description,omitempty"`
+	// Pointer so an unset attribute is omitted entirely and the API's own default applies, rather
+	// than a zero value turning threading off for anyone who never mentioned it.
+	ThreadRelatedEvents *bool `json:"thread_related_events,omitempty"`
 }
 
 type IntegrationUpdateRequest struct {
-	Name        string `json:"name,omitempty"`
-	APIURL      string `json:"api_url,omitempty"`
-	APIKey      string `json:"api_key,omitempty"`
-	Description string `json:"description,omitempty"`
+	Name                string `json:"name,omitempty"`
+	APIURL              string `json:"api_url,omitempty"`
+	APIKey              string `json:"api_key,omitempty"`
+	Description         string `json:"description,omitempty"`
+	ThreadRelatedEvents *bool  `json:"thread_related_events,omitempty"`
 }
 
 type IntegrationResource struct {
@@ -113,6 +118,14 @@ func (r *IntegrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Optional:    true,
 				Computed:    true,
 			},
+			// Optional without Computed, and never read back from the API response. The server
+			// defaults it, so making it Computed would mean mapping a value Terraform never planned
+			// onto state -- "Provider produced inconsistent result after apply" on every run, the
+			// same trap run_after_stage fell into.
+			"thread_related_events": schema.BoolAttribute{
+				Description: "Post later events of a run as replies under the first message instead of as new messages. Defaults to true on the server.",
+				Optional:    true,
+			},
 			"created_at": schema.StringAttribute{
 				Description: "The timestamp when the integration was created.",
 				Computed:    true,
@@ -153,6 +166,10 @@ func (r *IntegrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	if !data.Description.IsNull() && !data.Description.IsUnknown() {
 		createReq.Description = data.Description.ValueString()
+	}
+	if !data.ThreadRelatedEvents.IsNull() && !data.ThreadRelatedEvents.IsUnknown() {
+		value := data.ThreadRelatedEvents.ValueBool()
+		createReq.ThreadRelatedEvents = &value
 	}
 
 	reqBody, err := json.Marshal(createReq)
@@ -287,6 +304,10 @@ func (r *IntegrationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 	if !plan.Description.Equal(state.Description) {
 		updateReq.Description = plan.Description.ValueString()
+	}
+	if !plan.ThreadRelatedEvents.Equal(state.ThreadRelatedEvents) && !plan.ThreadRelatedEvents.IsNull() {
+		value := plan.ThreadRelatedEvents.ValueBool()
+		updateReq.ThreadRelatedEvents = &value
 	}
 
 	reqBody, err := json.Marshal(updateReq)
