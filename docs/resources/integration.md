@@ -31,6 +31,11 @@ The following arguments are supported:
 * `api_url` - (Optional) The API URL for the integration.
 * `api_key` - (Optional) The API key for the integration. This value is write-only and is never returned by the API on read. It is always marked as sensitive in state.
 * `description` - (Optional) Description of the integration.
+* `thread_related_events` - (Optional) Post later events of a run — approved, applied, and what
+  the agents said about it — as replies under the message that announced the run, instead of as new
+  top-level messages. Slack only; Teams incoming webhooks have no thread handle. The server
+  defaults this to `true` for integrations created from here on, so leaving it unset keeps
+  threading on. It is not read back from the API, so it stays absent from state unless you set it.
 
 ## Attributes Reference
 
