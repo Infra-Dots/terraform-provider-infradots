@@ -63,6 +63,9 @@ type OrganizationAPIResponse struct {
 	WorkspaceInterconnectionsEnabled bool           `json:"workspace_interconnections_enabled"`
 	// Managed by infradots_organization_agent_pool; read by the organization data source.
 	AgentPool *string `json:"agent_pool"`
+	// Managed by infradots_organization_model_provider, for the same reason.
+	ModelProvider         *string `json:"model_provider"`
+	AllowPlatformFallback bool    `json:"allow_platform_fallback"`
 }
 
 type Member struct {

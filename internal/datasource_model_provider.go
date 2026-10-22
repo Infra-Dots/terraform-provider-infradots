@@ -23,13 +23,18 @@ type ModelProviderDataSource struct {
 }
 
 type ModelProviderDataSourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	OrganizationName types.String `tfsdk:"organization_name"`
-	Name             types.String `tfsdk:"name"`
-	Provider         types.String `tfsdk:"provider_type"`
-	Description      types.String `tfsdk:"description"`
-	CreatedAt        types.String `tfsdk:"created_at"`
-	UpdatedAt        types.String `tfsdk:"updated_at"`
+	ID                types.String `tfsdk:"id"`
+	OrganizationName  types.String `tfsdk:"organization_name"`
+	Name              types.String `tfsdk:"name"`
+	Provider          types.String `tfsdk:"provider_type"`
+	Config            types.Map    `tfsdk:"config"`
+	ModelMap          types.Map    `tfsdk:"model_map"`
+	Enabled           types.Bool   `tfsdk:"enabled"`
+	VerifiedAt        types.String `tfsdk:"verified_at"`
+	VerificationError types.String `tfsdk:"verification_error"`
+	Description       types.String `tfsdk:"description"`
+	CreatedAt         types.String `tfsdk:"created_at"`
+	UpdatedAt         types.String `tfsdk:"updated_at"`
 }
 
 func (d *ModelProviderDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -56,7 +61,30 @@ func (d *ModelProviderDataSource) Schema(_ context.Context, _ datasource.SchemaR
 				Computed:    true,
 			},
 			"provider_type": schema.StringAttribute{
-				Description: "The provider type (e.g., openai, anthropic, google, azure_openai, cohere, llama).",
+				Description: "Where the organization's model calls go: anthropic, bedrock, vertex or foundry.",
+				Computed:    true,
+			},
+			"config": schema.MapAttribute{
+				Description: "The provider's non-secret settings (a region, a project, an endpoint). " +
+					"The secret ones are never returned.",
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"model_map": schema.MapAttribute{
+				Description: "Each model InfraDots asks for, mapped to this provider's own id.",
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"enabled": schema.BoolAttribute{
+				Description: "Whether this provider may serve runs.",
+				Computed:    true,
+			},
+			"verified_at": schema.StringAttribute{
+				Description: "When this provider last answered a verification call, if it ever has.",
+				Computed:    true,
+			},
+			"verification_error": schema.StringAttribute{
+				Description: "Why the last verification failed, if it did.",
 				Computed:    true,
 			},
 			"description": schema.StringAttribute{
@@ -163,6 +191,11 @@ func (d *ModelProviderDataSource) Read(ctx context.Context, req datasource.ReadR
 		data.OrganizationName = types.StringValue(orgName)
 		data.Name = types.StringValue(mp.Name)
 		data.Provider = types.StringValue(mp.Provider)
+		data.Config = mapValue(mp.Config)
+		data.ModelMap = mapValue(mp.ModelMap)
+		data.Enabled = types.BoolValue(mp.Enabled)
+		data.VerifiedAt = types.StringValue(mp.VerifiedAt)
+		data.VerificationError = types.StringValue(mp.VerificationError)
 		data.Description = types.StringValue(mp.Description)
 		data.CreatedAt = types.StringValue(mp.CreatedAt)
 		data.UpdatedAt = types.StringValue(mp.UpdatedAt)
@@ -214,6 +247,11 @@ func (d *ModelProviderDataSource) Read(ctx context.Context, req datasource.ReadR
 				data.OrganizationName = types.StringValue(orgName)
 				data.Name = types.StringValue(mp.Name)
 				data.Provider = types.StringValue(mp.Provider)
+				data.Config = mapValue(mp.Config)
+				data.ModelMap = mapValue(mp.ModelMap)
+				data.Enabled = types.BoolValue(mp.Enabled)
+				data.VerifiedAt = types.StringValue(mp.VerifiedAt)
+				data.VerificationError = types.StringValue(mp.VerificationError)
 				data.Description = types.StringValue(mp.Description)
 				data.CreatedAt = types.StringValue(mp.CreatedAt)
 				data.UpdatedAt = types.StringValue(mp.UpdatedAt)

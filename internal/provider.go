@@ -115,6 +115,7 @@ func (p *InfradotsProvider) Resources(_ context.Context) []func() resource.Resou
 		NewIntegrationResource,
 		NewWorkspaceIntegrationResource,
 		NewModelProviderResource,
+		NewOrganizationModelProviderResource,
 		NewSshKeyResource,
 		NewWorkspaceScheduleResource,
 		NewAgentSkillResource,

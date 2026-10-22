@@ -9,8 +9,11 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -28,36 +31,53 @@ type ModelProviderResource struct {
 }
 
 type ModelProviderResourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	OrganizationName types.String `tfsdk:"organization_name"`
-	Name             types.String `tfsdk:"name"`
-	Provider         types.String `tfsdk:"provider_type"`
-	APIKey           types.String `tfsdk:"api_key"`
-	Description      types.String `tfsdk:"description"`
-	CreatedAt        types.String `tfsdk:"created_at"`
-	UpdatedAt        types.String `tfsdk:"updated_at"`
+	ID                types.String `tfsdk:"id"`
+	OrganizationName  types.String `tfsdk:"organization_name"`
+	Name              types.String `tfsdk:"name"`
+	Provider          types.String `tfsdk:"provider_type"`
+	APIKey            types.String `tfsdk:"api_key"`
+	Settings          types.Map    `tfsdk:"settings"`
+	Config            types.Map    `tfsdk:"config"`
+	ModelMap          types.Map    `tfsdk:"model_map"`
+	Enabled           types.Bool   `tfsdk:"enabled"`
+	VerifiedAt        types.String `tfsdk:"verified_at"`
+	VerificationError types.String `tfsdk:"verification_error"`
+	Description       types.String `tfsdk:"description"`
+	CreatedAt         types.String `tfsdk:"created_at"`
+	UpdatedAt         types.String `tfsdk:"updated_at"`
 }
 
 type ModelProviderAPIResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Provider    string `json:"provider"`
-	Description string `json:"description"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID                string            `json:"id"`
+	Name              string            `json:"name"`
+	Provider          string            `json:"provider"`
+	Config            map[string]string `json:"config"`
+	ModelMap          map[string]string `json:"model_map"`
+	Enabled           bool              `json:"enabled"`
+	VerifiedAt        string            `json:"verified_at"`
+	VerificationError string            `json:"verification_error"`
+	Description       string            `json:"description"`
+	CreatedAt         string            `json:"created_at"`
+	UpdatedAt         string            `json:"updated_at"`
 }
 
 type ModelProviderCreateRequest struct {
-	Name        string `json:"name"`
-	Provider    string `json:"provider"`
-	APIKey      string `json:"api_key"`
-	Description string `json:"description,omitempty"`
+	Name        string            `json:"name"`
+	Provider    string            `json:"provider"`
+	APIKey      string            `json:"api_key,omitempty"`
+	Settings    map[string]string `json:"settings,omitempty"`
+	ModelMap    map[string]string `json:"model_map,omitempty"`
+	Enabled     *bool             `json:"enabled,omitempty"`
+	Description string            `json:"description,omitempty"`
 }
 
 type ModelProviderUpdateRequest struct {
-	Name        string `json:"name,omitempty"`
-	APIKey      string `json:"api_key,omitempty"`
-	Description string `json:"description,omitempty"`
+	Name        string            `json:"name,omitempty"`
+	APIKey      string            `json:"api_key,omitempty"`
+	Settings    map[string]string `json:"settings,omitempty"`
+	ModelMap    map[string]string `json:"model_map,omitempty"`
+	Enabled     *bool             `json:"enabled,omitempty"`
+	Description string            `json:"description,omitempty"`
 }
 
 func (r *ModelProviderResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -84,16 +104,56 @@ func (r *ModelProviderResource) Schema(_ context.Context, _ resource.SchemaReque
 				Required:    true,
 			},
 			"provider_type": schema.StringAttribute{
-				Description: "The provider type. One of: openai, anthropic, google, azure_openai, cohere, llama.",
-				Required:    true,
+				Description: "Where the organization's model calls go. One of: anthropic, bedrock, vertex, foundry. " +
+					"Each runs the same Claude models InfraDots runs, through your own account.",
+				Required: true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("openai", "anthropic", "google", "azure_openai", "cohere", "llama"),
+					stringvalidator.OneOf("anthropic", "bedrock", "vertex", "foundry"),
 				},
 			},
 			"api_key": schema.StringAttribute{
-				Description: "The API key for the model provider. Write-only; never read back from the API.",
-				Required:    true,
+				Description: "Shorthand for settings.api_key, for the providers that take one (anthropic, foundry). " +
+					"Write-only; never read back from the API.",
+				Optional:  true,
+				Sensitive: true,
+			},
+			"settings": schema.MapAttribute{
+				Description: "The provider's client settings, by their own names: api_key and base_url for anthropic; " +
+					"aws_region, aws_access_key, aws_secret_key and aws_session_token for bedrock; project_id, region " +
+					"and access_token for vertex; resource, api_key and base_url for foundry. " +
+					"Write-only as a whole, because InfraDots cannot return the secret half; the non-secret half is " +
+					"read back under `config`. A provider must carry the credentials that identify its account, or a " +
+					"run on it would reach InfraDots' own.",
+				Optional:    true,
 				Sensitive:   true,
+				ElementType: types.StringType,
+			},
+			"config": schema.MapAttribute{
+				Description: "The non-secret half of `settings`, as InfraDots holds it (a region, a project, an endpoint).",
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"model_map": schema.MapAttribute{
+				Description: "Each model InfraDots asks for, mapped to this provider's own id, e.g. " +
+					"{ \"claude-opus-5\" = \"eu.anthropic.claude-opus-5-v1:0\" }. Required for bedrock, vertex and " +
+					"foundry: a run asking for an unmapped model stops before it starts.",
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"enabled": schema.BoolAttribute{
+				Description: "Whether this provider may serve runs. Defaults to true.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(true),
+			},
+			"verified_at": schema.StringAttribute{
+				Description: "When this provider last answered a verification call, if it ever has.",
+				Computed:    true,
+			},
+			"verification_error": schema.StringAttribute{
+				Description: "Why the last verification failed, if it did.",
+				Computed:    true,
 			},
 			"description": schema.StringAttribute{
 				Description: "A description of the model provider.",
@@ -128,11 +188,18 @@ func (r *ModelProviderResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
+	enabled := data.Enabled.ValueBool()
 	createReq := ModelProviderCreateRequest{
 		Name:        data.Name.ValueString(),
 		Provider:    data.Provider.ValueString(),
 		APIKey:      data.APIKey.ValueString(),
+		Settings:    stringMap(ctx, data.Settings, &resp.Diagnostics),
+		ModelMap:    stringMap(ctx, data.ModelMap, &resp.Diagnostics),
+		Enabled:     &enabled,
 		Description: data.Description.ValueString(),
+	}
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	reqBody, err := json.Marshal(createReq)
@@ -181,13 +248,7 @@ func (r *ModelProviderResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	data.ID = types.StringValue(mp.ID)
-	data.Name = types.StringValue(mp.Name)
-	data.Provider = types.StringValue(mp.Provider)
-	data.Description = types.StringValue(mp.Description)
-	data.CreatedAt = types.StringValue(mp.CreatedAt)
-	data.UpdatedAt = types.StringValue(mp.UpdatedAt)
-	// api_key is write-only; keep value from plan (already in data)
+	applyModelProviderResponse(&data, mp)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -243,13 +304,7 @@ func (r *ModelProviderResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	data.ID = types.StringValue(mp.ID)
-	data.Name = types.StringValue(mp.Name)
-	data.Provider = types.StringValue(mp.Provider)
-	data.Description = types.StringValue(mp.Description)
-	data.CreatedAt = types.StringValue(mp.CreatedAt)
-	data.UpdatedAt = types.StringValue(mp.UpdatedAt)
-	// api_key is write-only; do NOT overwrite from API response
+	applyModelProviderResponse(&data, mp)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -278,8 +333,23 @@ func (r *ModelProviderResource) Update(ctx context.Context, req resource.UpdateR
 	if !plan.APIKey.Equal(state.APIKey) {
 		updateReq.APIKey = plan.APIKey.ValueString()
 	}
+	// Sent only when they changed: writing settings replaces them wholesale and drops the
+	// provider's verification, so an unrelated edit must not touch them.
+	if !plan.Settings.Equal(state.Settings) {
+		updateReq.Settings = stringMap(ctx, plan.Settings, &resp.Diagnostics)
+	}
+	if !plan.ModelMap.Equal(state.ModelMap) {
+		updateReq.ModelMap = stringMap(ctx, plan.ModelMap, &resp.Diagnostics)
+	}
+	if !plan.Enabled.Equal(state.Enabled) {
+		enabled := plan.Enabled.ValueBool()
+		updateReq.Enabled = &enabled
+	}
 	if !plan.Description.Equal(state.Description) {
 		updateReq.Description = plan.Description.ValueString()
+	}
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	reqBody, err := json.Marshal(updateReq)
@@ -329,13 +399,7 @@ func (r *ModelProviderResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	plan.ID = types.StringValue(mp.ID)
-	plan.Name = types.StringValue(mp.Name)
-	plan.Provider = types.StringValue(mp.Provider)
-	plan.Description = types.StringValue(mp.Description)
-	plan.CreatedAt = types.StringValue(mp.CreatedAt)
-	plan.UpdatedAt = types.StringValue(mp.UpdatedAt)
-	// api_key: keep plan value (write-only)
+	applyModelProviderResponse(&plan, mp)
 
 	diags = resp.State.Set(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -453,4 +517,45 @@ func (r *ModelProviderResource) ImportState(ctx context.Context, req resource.Im
 
 	diags := resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// stringMap reads a types.Map of strings into a Go map. Null or unknown yields nil, which the
+// request structs omit -- not an empty map, which would mean "replace what is stored with nothing".
+func stringMap(ctx context.Context, value types.Map, diags *diag.Diagnostics) map[string]string {
+	if value.IsNull() || value.IsUnknown() {
+		return nil
+	}
+	var out map[string]string
+	diags.Append(value.ElementsAs(ctx, &out, false)...)
+	return out
+}
+
+// mapValue turns an API map into a types.Map, never null: an absent map is an empty one, so a plan
+// does not show a change between null and {}.
+func mapValue(values map[string]string) types.Map {
+	elements := map[string]attr.Value{}
+	for key, value := range values {
+		elements[key] = types.StringValue(value)
+	}
+	return types.MapValueMust(types.StringType, elements)
+}
+
+// applyModelProviderResponse copies what the API returned onto the model.
+//
+// `settings` and `api_key` are deliberately not touched. The API cannot return the secret half of
+// the settings and does not try to, so overwriting them here would replace the configured value
+// with nothing and report "inconsistent values for sensitive attribute" on the next apply -- the
+// same trap `variable.value` fell into. The configured value stays; only `config` reads back.
+func applyModelProviderResponse(data *ModelProviderResourceModel, mp ModelProviderAPIResponse) {
+	data.ID = types.StringValue(mp.ID)
+	data.Name = types.StringValue(mp.Name)
+	data.Provider = types.StringValue(mp.Provider)
+	data.Config = mapValue(mp.Config)
+	data.ModelMap = mapValue(mp.ModelMap)
+	data.Enabled = types.BoolValue(mp.Enabled)
+	data.VerifiedAt = types.StringValue(mp.VerifiedAt)
+	data.VerificationError = types.StringValue(mp.VerificationError)
+	data.Description = types.StringValue(mp.Description)
+	data.CreatedAt = types.StringValue(mp.CreatedAt)
+	data.UpdatedAt = types.StringValue(mp.UpdatedAt)
 }
