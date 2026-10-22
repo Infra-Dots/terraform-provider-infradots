@@ -8,7 +8,7 @@ Use this data source to retrieve details of an existing model provider in Infrad
 # Retrieve model provider by name and organization name
 data "infradots_model_provider_data" "by_name" {
   organization_name = "example-org"
-  name              = "openai-primary"
+  name              = "our-bedrock"
 }
 
 # Retrieve model provider by ID (organization name is still required)
@@ -29,7 +29,14 @@ data "infradots_model_provider_data" "by_id" {
 * `id` - The unique ID of the model provider.
 * `organization_name` - The name of the organization.
 * `name` - The name of the model provider.
-* `provider_type` - The provider type (e.g., openai, anthropic, google, azure_openai, cohere, llama).
+* `provider_type` - Where the organization's model calls go: `anthropic`, `bedrock`, `vertex` or
+  `foundry`.
+* `config` - The provider's non-secret settings (a region, a project, an endpoint). The secret ones
+  are never returned by the API, so they are not available here.
+* `model_map` - Each model InfraDots asks for, mapped to this provider's own id.
+* `enabled` - Whether this provider may serve runs.
+* `verified_at` - When this provider last answered a verification call, if it ever has.
+* `verification_error` - Why the last verification failed, if it did.
 * `description` - A description of the model provider.
 * `created_at` - The timestamp when the model provider was created.
 * `updated_at` - The timestamp when the model provider was last updated.
