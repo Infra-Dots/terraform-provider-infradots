@@ -592,6 +592,12 @@ func TestWorkspaceResource_Schema(t *testing.T) {
 	updatedAtAttr := attrs["updated_at"].(schema.StringAttribute)
 	assert.True(t, updatedAtAttr.Computed)
 
+	// The lock is read-only: never planned from config, so a hand-taken lock is not a diff.
+	lockedAttr := attrs["locked"].(schema.BoolAttribute)
+	assert.True(t, lockedAttr.Computed)
+	assert.False(t, lockedAttr.Optional)
+	assert.Nil(t, lockedAttr.Default)
+
 	// Check vcs_id attribute
 	vcsIdAttr := attrs["vcs_id"].(schema.StringAttribute)
 	assert.False(t, vcsIdAttr.Required)

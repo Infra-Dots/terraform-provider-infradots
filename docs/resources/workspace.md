@@ -50,6 +50,7 @@ In addition to all arguments above, the following attributes are exported:
 * `id` - The ID of the workspace (UUID).
 * `created_at` - The timestamp when the workspace was created (RFC3339 format).
 * `updated_at` - The timestamp when the workspace was last updated (RFC3339 format).
+* `locked` - Whether the workspace is locked. Read-only: lock and unlock a workspace from InfraDots (the workspace's **Lock**/**Unlock** action, or `POST /api/organizations/{org}/workspaces/{name}/lock/` and `.../unlock/`). A lock taken by hand is never a diff in a plan, and an apply never releases it.
 * `repository_created` - Whether infradots created the repository while creating this workspace. Recorded at create time and never refreshed afterwards, since the workspace read endpoint does not report repository state. `false` for imported workspaces.
 * `vcs` - VCS connection details associated with this workspace. This is a nested object with the following attributes:
   * `id` - The VCS unique ID (UUID).

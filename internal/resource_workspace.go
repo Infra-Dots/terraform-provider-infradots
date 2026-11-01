@@ -257,10 +257,16 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"locked": schema.BoolAttribute{
-				Description: "Whether the workspace is locked.",
-				Optional:    true,
-				Computed:    true,
-				Default:     booldefault.StaticBool(false),
+				Description: "Whether the workspace is locked. Read-only: a lock is taken and " +
+					"released with the workspace's Lock/Unlock action, never by this resource.",
+				// Computed only. As Optional with a false default, a workspace someone locked
+				// by hand showed up as a diff in every plan, and the update could never
+				// converge -- the API leaves the lock alone, so the apply failed with an
+				// inconsistent result.
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"auto_apply": schema.BoolAttribute{
 				Description: "Whether to auto-apply successful plans.",

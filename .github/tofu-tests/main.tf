@@ -48,7 +48,6 @@ resource "infradots_workspace" "test_workspace" {
   default_job_action = "plan"
   folder             = "/"
   execution_mode     = "Remote"
-  locked             = false
   agents_enabled     = false
   tags = {
     environment = "integration-test"
