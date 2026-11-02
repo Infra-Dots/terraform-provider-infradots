@@ -57,8 +57,6 @@ resource "infradots_workspace" "test_workspace" {
   drift_detection_enabled = false
   remedy_drift            = false
   auto_implement_changes  = false
-
-  review_blocking_severity = "warning"
 }
 
 resource "infradots_workspace" "test_workspace_b" {
