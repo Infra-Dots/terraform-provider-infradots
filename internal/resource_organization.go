@@ -41,6 +41,7 @@ type OrganizationResourceModel struct {
 	DriftDetectionEnabled            types.Bool   `tfsdk:"drift_detection_enabled"`
 	RemedyDrift                      types.Bool   `tfsdk:"remedy_drift"`
 	AutoImplementChanges             types.Bool   `tfsdk:"auto_implement_changes"`
+	ReviewBlockingSeverity           types.String `tfsdk:"review_blocking_severity"`
 	ApprovalReminderIntervalHours    types.Int64  `tfsdk:"approval_reminder_interval_hours"`
 	WorkspaceInterconnectionsEnabled types.Bool   `tfsdk:"workspace_interconnections_enabled"`
 }
@@ -59,6 +60,7 @@ type OrganizationAPIResponse struct {
 	DriftDetectionEnabled            bool           `json:"drift_detection_enabled"`
 	RemedyDrift                      bool           `json:"remedy_drift"`
 	AutoImplementChanges             bool           `json:"auto_implement_changes"`
+	ReviewBlockingSeverity           string         `json:"review_blocking_severity"`
 	ApprovalReminderIntervalHours    *int64         `json:"approval_reminder_interval_hours"`
 	WorkspaceInterconnectionsEnabled bool           `json:"workspace_interconnections_enabled"`
 	// Managed by infradots_organization_agent_pool; read by the organization data source.
@@ -84,8 +86,22 @@ type OrganizationUpdateRequest struct {
 	DriftDetectionEnabled            *bool          `json:"drift_detection_enabled,omitempty"`
 	RemedyDrift                      *bool          `json:"remedy_drift,omitempty"`
 	AutoImplementChanges             *bool          `json:"auto_implement_changes,omitempty"`
+	ReviewBlockingSeverity           string         `json:"review_blocking_severity,omitempty"`
 	ApprovalReminderIntervalHours    *int64         `json:"approval_reminder_interval_hours,omitempty"`
 	WorkspaceInterconnectionsEnabled *bool          `json:"workspace_interconnections_enabled,omitempty"`
+}
+
+// Agent review finding severities, most severe first. A threshold blocks itself and everything before it.
+var reviewSeverities = []string{"blocker", "warning", "info", "nit"}
+
+const defaultReviewBlockingSeverity = "warning"
+
+// reviewBlockingSeverity is the organization's setting, or the default from an API that predates it.
+func reviewBlockingSeverity(organization OrganizationAPIResponse) string {
+	if organization.ReviewBlockingSeverity == "" {
+		return defaultReviewBlockingSeverity
+	}
+	return organization.ReviewBlockingSeverity
 }
 
 type OrganizationResource struct {
@@ -157,6 +173,16 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
+			"review_blocking_severity": schema.StringAttribute{
+				Description: "The lowest agent review finding severity that requests changes: blocker, warning, info or nit. " +
+					"Only findings at this severity or above are auto-implemented. Defaults to warning.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString(defaultReviewBlockingSeverity),
+				Validators: []validator.String{
+					stringvalidator.OneOf(reviewSeverities...),
+				},
+			},
 			"workspace_interconnections_enabled": schema.BoolAttribute{
 				Description: "Auto-discover workspace dependencies from terraform_remote_state data sources on state upload.",
 				Optional:    true,
@@ -199,6 +225,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 		DriftDetectionEnabled:            &driftDetection,
 		RemedyDrift:                      &remedyDrift,
 		AutoImplementChanges:             &autoImplement,
+		ReviewBlockingSeverity:           data.ReviewBlockingSeverity.ValueString(),
 		WorkspaceInterconnectionsEnabled: &workspaceInterconnections,
 	}
 
@@ -273,6 +300,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+	data.ReviewBlockingSeverity = types.StringValue(reviewBlockingSeverity(organization))
 	data.WorkspaceInterconnectionsEnabled = types.BoolValue(organization.WorkspaceInterconnectionsEnabled)
 
 	if organization.ApprovalReminderIntervalHours != nil {
@@ -352,6 +380,7 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+	data.ReviewBlockingSeverity = types.StringValue(reviewBlockingSeverity(organization))
 	data.WorkspaceInterconnectionsEnabled = types.BoolValue(organization.WorkspaceInterconnectionsEnabled)
 
 	if organization.ApprovalReminderIntervalHours != nil {
@@ -416,6 +445,10 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	if !plan.AutoImplementChanges.Equal(state.AutoImplementChanges) {
 		v := plan.AutoImplementChanges.ValueBool()
 		updateReq.AutoImplementChanges = &v
+	}
+
+	if !plan.ReviewBlockingSeverity.Equal(state.ReviewBlockingSeverity) {
+		updateReq.ReviewBlockingSeverity = plan.ReviewBlockingSeverity.ValueString()
 	}
 
 	if !plan.WorkspaceInterconnectionsEnabled.Equal(state.WorkspaceInterconnectionsEnabled) {
@@ -497,6 +530,7 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	plan.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	plan.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	plan.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+	plan.ReviewBlockingSeverity = types.StringValue(reviewBlockingSeverity(organization))
 	plan.WorkspaceInterconnectionsEnabled = types.BoolValue(organization.WorkspaceInterconnectionsEnabled)
 
 	if organization.ApprovalReminderIntervalHours != nil {
@@ -620,6 +654,7 @@ func (r *OrganizationResource) ImportState(ctx context.Context, req resource.Imp
 	data.DriftDetectionEnabled = types.BoolValue(organization.DriftDetectionEnabled)
 	data.RemedyDrift = types.BoolValue(organization.RemedyDrift)
 	data.AutoImplementChanges = types.BoolValue(organization.AutoImplementChanges)
+	data.ReviewBlockingSeverity = types.StringValue(reviewBlockingSeverity(organization))
 	data.WorkspaceInterconnectionsEnabled = types.BoolValue(organization.WorkspaceInterconnectionsEnabled)
 
 	if organization.ApprovalReminderIntervalHours != nil {
