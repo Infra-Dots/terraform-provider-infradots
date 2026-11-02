@@ -22,6 +22,7 @@ The following arguments are supported:
 * `drift_detection_enabled` - (Optional) Whether drift detection is enabled for the organization. Defaults to `false`.
 * `remedy_drift` - (Optional) Whether to automatically remedy detected drift. Defaults to `false`.
 * `auto_implement_changes` - (Optional) Whether to automatically implement AI-suggested changes. Defaults to `false`.
+* `review_blocking_severity` - (Optional) The lowest agent review finding severity that requests changes: `blocker`, `warning`, `info` or `nit`. Reviews grade every finding; findings at this severity or above request changes, and only those are auto-implemented. Defaults to `warning`.
 * `workspace_interconnections_enabled` - (Optional) When enabled, the platform parses each uploaded terraform state for `terraform_remote_state` data sources (`remote`/`cloud` backends) and automatically creates `infradots_workspace_interconnection` rows linking the workspace to the referenced workspaces in the same organization. Defaults to `false`.
 * `approval_reminder_interval_hours` - (Optional) How often (in hours) to send approval reminder notifications for jobs pending approval. Defaults to `1`. Set to `null` to disable reminders. Reminders are only sent for workspaces that have at least one Slack or Teams integration attached.
 * `tags` - (Optional) A map of key-value tags to assign to the organization.

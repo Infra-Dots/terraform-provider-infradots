@@ -63,6 +63,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"execution_mode": "remote",
 			"agents_enabled": true,
 			"workspace_interconnections_enabled": true,
+			"review_blocking_severity": "blocker",
 			"approval_reminder_interval_hours": 1
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -122,6 +123,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			"execution_mode": "Local",
 			"agents_enabled": false,
 			"workspace_interconnections_enabled": true,
+			"review_blocking_severity": "nit",
 			"approval_reminder_interval_hours": 8
 		}`
 		resp.Body = io.NopCloser(strings.NewReader(jsonResp))
@@ -206,6 +208,8 @@ func TestOrganizationResource_Create(t *testing.T) {
 	assert.True(t, state.AgentsEnabled.ValueBool())
 	assert.False(t, state.WorkspaceInterconnectionsEnabled.ValueBool())
 	assert.Equal(t, int64(1), state.ApprovalReminderIntervalHours.ValueInt64())
+	// The create response predates the field: the default stands in.
+	assert.Equal(t, "warning", state.ReviewBlockingSeverity.ValueString())
 }
 
 func TestOrganizationResource_Read(t *testing.T) {
@@ -262,6 +266,7 @@ func TestOrganizationResource_Read(t *testing.T) {
 	assert.True(t, newState.AgentsEnabled.ValueBool())
 	assert.True(t, newState.WorkspaceInterconnectionsEnabled.ValueBool())
 	assert.Equal(t, int64(1), newState.ApprovalReminderIntervalHours.ValueInt64())
+	assert.Equal(t, "blocker", newState.ReviewBlockingSeverity.ValueString())
 }
 
 func TestOrganizationResource_Update(t *testing.T) {
@@ -286,6 +291,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	plan.ExecutionMode = types.StringValue("Local")
 	plan.AgentsEnabled = types.BoolValue(false)
 	plan.WorkspaceInterconnectionsEnabled = types.BoolValue(true)
+	plan.ReviewBlockingSeverity = types.StringValue("nit")
 	plan.Tags = types.MapNull(types.StringType)
 
 	// Create request/response objects
@@ -336,6 +342,7 @@ func TestOrganizationResource_Update(t *testing.T) {
 	assert.True(t, newState.WorkspaceInterconnectionsEnabled.ValueBool())
 	assert.Equal(t, "2025-07-07T12:01:00Z", newState.UpdatedAt.ValueString())
 	assert.Equal(t, int64(8), newState.ApprovalReminderIntervalHours.ValueInt64())
+	assert.Equal(t, "nit", newState.ReviewBlockingSeverity.ValueString())
 }
 
 func TestOrganizationResource_Delete(t *testing.T) {
@@ -417,6 +424,12 @@ func TestOrganizationResource_Schema(t *testing.T) {
 	workspaceInterconnAttr := attrs["workspace_interconnections_enabled"].(schema.BoolAttribute)
 	assert.True(t, workspaceInterconnAttr.Optional)
 	assert.True(t, workspaceInterconnAttr.Computed)
+
+	assert.Contains(t, attrs, "review_blocking_severity")
+	severityAttr := attrs["review_blocking_severity"].(schema.StringAttribute)
+	assert.True(t, severityAttr.Optional)
+	assert.True(t, severityAttr.Computed)
+	assert.Len(t, severityAttr.Validators, 1)
 }
 
 func TestOrganizationResource_ImportState(t *testing.T) {
