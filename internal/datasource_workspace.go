@@ -39,6 +39,7 @@ type WorkspaceDataSourceModel struct {
 	WorkerPoolID     types.String `tfsdk:"worker_pool_id"`
 	AgentPoolID      types.String `tfsdk:"agent_pool_id"`
 	SshKeyID         types.String `tfsdk:"ssh_key_id"`
+	TargetedApply    types.Bool   `tfsdk:"targeted_apply"`
 }
 
 type WorkspaceDataSourceFilterModel struct {
@@ -70,6 +71,10 @@ func (d *WorkspaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			},
 			"ssh_key_id": schema.StringAttribute{
 				Description: "ID of the SSH key the workspace's module sources over SSH use, or null.",
+				Computed:    true,
+			},
+			"targeted_apply": schema.BoolAttribute{
+				Description: "Whether pushes and pull requests plan and apply only the resources they change; the nightly drift check plans the rest.",
 				Computed:    true,
 			},
 			"organization_name": schema.StringAttribute{
@@ -298,6 +303,7 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 		data.WorkerPoolID = types.StringPointerValue(apiResp.WorkerPool)
 		data.AgentPoolID = types.StringPointerValue(apiResp.AgentPool)
 		data.SshKeyID = types.StringPointerValue(apiResp.SshKey)
+		data.TargetedApply = types.BoolValue(apiResp.TargetedApply != nil && *apiResp.TargetedApply)
 	} else {
 		// List of workspaces, filter by name
 		var apiRespList []WorkspaceAPIResponse
@@ -324,6 +330,7 @@ func (d *WorkspaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 				data.WorkerPoolID = types.StringPointerValue(workspace.WorkerPool)
 				data.AgentPoolID = types.StringPointerValue(workspace.AgentPool)
 				data.SshKeyID = types.StringPointerValue(workspace.SshKey)
+				data.TargetedApply = types.BoolValue(workspace.TargetedApply != nil && *workspace.TargetedApply)
 				found = true
 				break
 			}

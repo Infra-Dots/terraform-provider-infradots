@@ -54,6 +54,7 @@ type WorkspaceResourceModel struct {
 	AgentsEnabled         types.Bool   `tfsdk:"agents_enabled"`
 	DriftDetectionEnabled types.Bool   `tfsdk:"drift_detection_enabled"`
 	RemedyDrift           types.Bool   `tfsdk:"remedy_drift"`
+	TargetedApply         types.Bool   `tfsdk:"targeted_apply"`
 	AutoImplementChanges  types.Bool   `tfsdk:"auto_implement_changes"`
 	ValidateMode          types.String `tfsdk:"validate_mode"`
 	TflintMode            types.String `tfsdk:"tflint_mode"`
@@ -108,6 +109,7 @@ type WorkspaceAPIResponse struct {
 	AgentsEnabled         bool             `json:"agents_enabled"`
 	DriftDetectionEnabled *bool            `json:"drift_detection_enabled"`
 	RemedyDrift           *bool            `json:"remedy_drift"`
+	TargetedApply         *bool            `json:"targeted_apply"`
 	AutoImplementChanges  *bool            `json:"auto_implement_changes"`
 	ValidateMode          *string          `json:"validate_mode"`
 	TflintMode            *string          `json:"tflint_mode"`
@@ -137,6 +139,7 @@ type WorkspaceCreateRequest struct {
 	AgentsEnabled         bool             `json:"agents_enabled"`
 	DriftDetectionEnabled *bool            `json:"drift_detection_enabled,omitempty"`
 	RemedyDrift           *bool            `json:"remedy_drift,omitempty"`
+	TargetedApply         *bool            `json:"targeted_apply,omitempty"`
 	AutoImplementChanges  *bool            `json:"auto_implement_changes,omitempty"`
 	ValidateMode          *string          `json:"validate_mode,omitempty"`
 	TflintMode            *string          `json:"tflint_mode,omitempty"`
@@ -177,6 +180,7 @@ type WorkspaceUpdateRequest struct {
 	AgentsEnabled         *bool             `json:"agents_enabled,omitempty"`
 	DriftDetectionEnabled *bool             `json:"drift_detection_enabled,omitempty"`
 	RemedyDrift           *bool             `json:"remedy_drift,omitempty"`
+	TargetedApply         *bool             `json:"targeted_apply,omitempty"`
 	AutoImplementChanges  *bool             `json:"auto_implement_changes,omitempty"`
 	ValidateMode          *string           `json:"validate_mode,omitempty"`
 	TflintMode            *string           `json:"tflint_mode,omitempty"`
@@ -364,6 +368,12 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "Whether to remedy drift automatically. If null, inherits from the organization.",
 				Optional:    true,
 			},
+			"targeted_apply": schema.BoolAttribute{
+				Description: "Whether pushes and pull requests plan and apply only the resources they change; the nightly drift check plans the rest. Requires agents_enabled, drift detection and drift remediation (workspace or organization), and a non-Terragrunt iac_type.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
 			"auto_implement_changes": schema.BoolAttribute{
 				Description: "Whether to auto-implement changes. If null, inherits from the organization.",
 				Optional:    true,
@@ -531,6 +541,7 @@ func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceMod
 	} else {
 		data.RemedyDrift = types.BoolNull()
 	}
+	data.TargetedApply = types.BoolValue(workspace.TargetedApply != nil && *workspace.TargetedApply)
 	if workspace.AutoImplementChanges != nil {
 		data.AutoImplementChanges = types.BoolValue(*workspace.AutoImplementChanges)
 	} else {
@@ -625,6 +636,10 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 	if !data.RemedyDrift.IsNull() {
 		v := data.RemedyDrift.ValueBool()
 		createReq.RemedyDrift = &v
+	}
+	if !data.TargetedApply.IsNull() && !data.TargetedApply.IsUnknown() {
+		v := data.TargetedApply.ValueBool()
+		createReq.TargetedApply = &v
 	}
 	if !data.AutoImplementChanges.IsNull() {
 		v := data.AutoImplementChanges.ValueBool()
@@ -885,6 +900,10 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 			v := plan.RemedyDrift.ValueBool()
 			updateReq.RemedyDrift = &v
 		}
+	}
+	if !plan.TargetedApply.Equal(state.TargetedApply) {
+		v := plan.TargetedApply.ValueBool()
+		updateReq.TargetedApply = &v
 	}
 	if !plan.AutoImplementChanges.Equal(state.AutoImplementChanges) {
 		if !plan.AutoImplementChanges.IsNull() {

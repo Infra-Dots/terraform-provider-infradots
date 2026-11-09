@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -842,4 +843,123 @@ func TestWorkspaceResource_Create_SendsTriggerPatterns(t *testing.T) {
 	require.Len(t, mapped, 2)
 	assert.Equal(t, "modules/vpc/.*", mapped[0].Pattern.ValueString())
 	assert.False(t, mapped[1].Enabled.ValueBool())
+}
+
+func targetedApplyModel(targeted bool) WorkspaceResourceModel {
+	var m WorkspaceResourceModel
+	m.ID = types.StringValue("id-1")
+	m.OrganizationName = types.StringValue("test-org")
+	m.Name = types.StringValue("test-workspace")
+	m.Source = types.StringValue("https://github.com/test/repo")
+	m.Branch = types.StringValue("main")
+	m.TerraformVersion = types.StringValue("1.5.0")
+	m.Locked = types.BoolValue(false)
+	m.AutoApply = types.BoolValue(false)
+	m.IacType = types.StringValue("TF")
+	m.DefaultJobAction = types.StringValue("plan")
+	m.Folder = types.StringValue("/")
+	m.ExecutionMode = types.StringValue("Remote")
+	m.AgentsEnabled = types.BoolValue(true)
+	m.TargetedApply = types.BoolValue(targeted)
+	m.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	m.TflintPlugins = types.ListNull(types.StringType)
+	m.TriggerPatterns = types.ListNull(triggerPatternObjectType)
+	m.VCS = nullVCSObject()
+	return m
+}
+
+func targetedApplyResource(capt *capturingRoundTripper) (*WorkspaceResource, resource.SchemaResponse) {
+	r := &WorkspaceResource{provider: &InfradotsProvider{
+		host: "api.infradots.com", token: "test-token",
+		client: &http.Client{Transport: capt},
+	}}
+	schemaResp := resource.SchemaResponse{}
+	r.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	return r, schemaResp
+}
+
+const targetedApplyBody = `{"id": "id-1", "name": "test-workspace", "source": "https://github.com/test/repo",
+	"branch": "main", "terraform_version": "1.5.0", "folder": "/", "execution_mode": "Remote",
+	"agents_enabled": true, "tags": {}, "targeted_apply": %t}`
+
+func TestWorkspaceResource_TargetedApply_Create(t *testing.T) {
+	ctx := context.Background()
+	capt := &capturingRoundTripper{status: http.StatusCreated, respBody: fmt.Sprintf(targetedApplyBody, true)}
+	r, schemaResp := targetedApplyResource(capt)
+
+	plan := targetedApplyModel(true)
+	request := resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema}}
+	require.Empty(t, request.Plan.Set(ctx, &plan))
+	response := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Create(ctx, request, &response)
+	require.False(t, response.Diagnostics.HasError())
+
+	var sent WorkspaceCreateRequest
+	require.NoError(t, json.Unmarshal([]byte(capt.lastBody), &sent))
+	require.NotNil(t, sent.TargetedApply)
+	assert.True(t, *sent.TargetedApply)
+
+	var state WorkspaceResourceModel
+	require.Empty(t, response.State.Get(ctx, &state))
+	assert.True(t, state.TargetedApply.ValueBool())
+}
+
+func TestWorkspaceResource_TargetedApply_Update(t *testing.T) {
+	ctx := context.Background()
+	capt := &capturingRoundTripper{status: http.StatusOK, respBody: fmt.Sprintf(targetedApplyBody, true)}
+	r, schemaResp := targetedApplyResource(capt)
+
+	state, plan := targetedApplyModel(false), targetedApplyModel(true)
+	request := resource.UpdateRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema},
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema},
+	}
+	require.Empty(t, request.State.Set(ctx, &state))
+	require.Empty(t, request.Plan.Set(ctx, &plan))
+	response := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Update(ctx, request, &response)
+	require.False(t, response.Diagnostics.HasError())
+
+	var sent WorkspaceUpdateRequest
+	require.NoError(t, json.Unmarshal([]byte(capt.lastBody), &sent))
+	require.NotNil(t, sent.TargetedApply)
+	assert.True(t, *sent.TargetedApply)
+
+	var got WorkspaceResourceModel
+	require.Empty(t, response.State.Get(ctx, &got))
+	assert.True(t, got.TargetedApply.ValueBool())
+}
+
+func TestWorkspaceResource_TargetedApply_Update_RejectedSurfacesServerMessage(t *testing.T) {
+	ctx := context.Background()
+	reason := "Drift remediation must be enabled for targeted apply."
+	capt := &capturingRoundTripper{status: http.StatusBadRequest, respBody: `{"targeted_apply": "` + reason + `"}`}
+	r, schemaResp := targetedApplyResource(capt)
+
+	state, plan := targetedApplyModel(false), targetedApplyModel(true)
+	request := resource.UpdateRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema},
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema},
+	}
+	require.Empty(t, request.State.Set(ctx, &state))
+	require.Empty(t, request.Plan.Set(ctx, &plan))
+	response := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Update(ctx, request, &response)
+
+	require.True(t, response.Diagnostics.HasError())
+	assert.Contains(t, response.Diagnostics.Errors()[0].Detail(), reason)
+}
+
+func TestWorkspaceResource_TargetedApply_ReadMapping(t *testing.T) {
+	ctx := context.Background()
+	on, off := true, false
+	for _, tc := range []struct {
+		in   *bool
+		want bool
+	}{{&on, true}, {&off, false}, {nil, false}} {
+		var data WorkspaceResourceModel
+		mapWorkspaceResponseToModel(ctx, &data, WorkspaceAPIResponse{TargetedApply: tc.in})
+		assert.Equal(t, tc.want, data.TargetedApply.ValueBool())
+		assert.False(t, data.TargetedApply.IsNull())
+	}
 }
