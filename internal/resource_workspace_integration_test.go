@@ -2,9 +2,12 @@ package internal
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,4 +95,44 @@ func TestWorkspaceIntegrationSchemaMarksRunAfterStageDeprecated(t *testing.T) {
 	assert.NotEmpty(t, attr.GetDeprecationMessage(),
 		"still accepted so existing configs keep working, but it no longer does anything")
 	assert.True(t, attr.IsComputed(), "which is why it must be carried, not refreshed")
+}
+
+// events = [] mutes an integration. omitempty used to drop the empty list, the attach endpoint
+// then applied the org defaults, and apply failed with ".events: new element 0 has appeared".
+func TestWorkspaceIntegrationCreate_SendsEvents(t *testing.T) {
+	ctx := context.Background()
+	for name, tc := range map[string]struct {
+		events  types.List
+		wantKey bool
+	}{
+		"empty list is sent as []":     {types.ListValueMust(types.StringType, []attr.Value{}), true},
+		"null is omitted for defaults": {types.ListNull(types.StringType), false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			transport := &recordingTransport{respond: func(*http.Request) (int, string) {
+				return http.StatusCreated, `{"id": "wi-1", "integration": {"id": "int-1"}, "events": []}`
+			}}
+			r := &WorkspaceIntegrationResource{provider: testProvider(transport)}
+			schemaResp := &resource.SchemaResponse{}
+			r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+			plan := WorkspaceIntegrationResourceModel{
+				OrganizationName: types.StringValue("acme"), WorkspaceName: types.StringValue("ws"),
+				IntegrationID: types.StringValue("int-1"), RunAfterStage: types.StringValue("apply"),
+				Events: tc.events, SlackChannels: types.ListNull(types.StringType),
+				SlackEnvChannels: types.MapNull(types.StringType),
+			}
+			req := resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema}}
+			require.Empty(t, req.Plan.Set(ctx, &plan))
+			resp := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			r.Create(ctx, req, &resp)
+			require.False(t, resp.Diagnostics.HasError(), resp.Diagnostics)
+
+			events, ok := transport.requests[0].Body["events"]
+			assert.Equal(t, tc.wantKey, ok)
+			if tc.wantKey {
+				assert.Equal(t, []any{}, events)
+			}
+		})
+	}
 }
