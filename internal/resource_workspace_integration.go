@@ -56,7 +56,7 @@ type WorkspaceIntegrationAPIResponse struct {
 
 type WorkspaceIntegrationCreateRequest struct {
 	IntegrationID    string            `json:"integration_id"`
-	Events           []string          `json:"events,omitempty"`
+	Events           *[]string         `json:"events,omitempty"` // pointer: [] mutes, nil gets org defaults
 	SlackChannels    []string          `json:"slack_channels,omitempty"`
 	SlackEnvChannels map[string]string `json:"slack_env_channels,omitempty"`
 }
@@ -194,13 +194,13 @@ func (r *WorkspaceIntegrationResource) Create(ctx context.Context, req resource.
 	}
 
 	if !data.Events.IsNull() && !data.Events.IsUnknown() {
-		var events []string
+		events := []string{}
 		diags = data.Events.ElementsAs(ctx, &events, false)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		createReq.Events = events
+		createReq.Events = &events
 	}
 
 	if !data.SlackChannels.IsNull() && !data.SlackChannels.IsUnknown() {
