@@ -23,3 +23,4 @@ data "infradots_user_data" "example" {
 * `organization_name` - The name of the organization the user belongs to.
 * `email` - The email address of the user.
 * `name` - The name of the user.
+* `organization_admin` - Whether the user administers the organization.

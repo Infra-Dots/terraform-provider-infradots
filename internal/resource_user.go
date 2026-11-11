@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -27,21 +28,23 @@ func NewUserResource() resource.Resource {
 
 // UserResourceModel maps the user resource schema data.
 type UserResourceModel struct {
-	ID               types.String `tfsdk:"id"`                // User UUID
-	OrganizationName types.String `tfsdk:"organization_name"` // Name of the organization
-	Email            types.String `tfsdk:"email"`             // User email address
-	LastLogin        types.String `tfsdk:"last_login"`        // Last login timestamp
-	Teams            types.List   `tfsdk:"teams"`             // List of teams
-	Permissions      types.List   `tfsdk:"permissions"`       // List of permissions
+	ID                types.String `tfsdk:"id"`                // User UUID
+	OrganizationName  types.String `tfsdk:"organization_name"` // Name of the organization
+	Email             types.String `tfsdk:"email"`             // User email address
+	LastLogin         types.String `tfsdk:"last_login"`        // Last login timestamp
+	Teams             types.List   `tfsdk:"teams"`             // List of teams
+	Permissions       types.List   `tfsdk:"permissions"`       // List of permissions
+	OrganizationAdmin types.Bool   `tfsdk:"organization_admin"`
 }
 
 // UserAPIResponse represents the JSON structure returned by the API
 type UserAPIResponse struct {
-	ID          string                 `json:"id"`
-	Email       string                 `json:"email"`
-	LastLogin   *time.Time             `json:"last_login"`
-	Teams       []interface{}          `json:"teams"`
-	Permissions []UserPermissionObject `json:"permissions"`
+	ID                string                 `json:"id"`
+	Email             string                 `json:"email"`
+	LastLogin         *time.Time             `json:"last_login"`
+	Teams             []interface{}          `json:"teams"`
+	Permissions       []UserPermissionObject `json:"permissions"`
+	OrganizationAdmin bool                   `json:"organization_admin"`
 }
 
 // UserPermissionObject represents a permission in the API response
@@ -103,6 +106,15 @@ func (r *UserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					},
 				},
 				Computed: true,
+			},
+			"organization_admin": schema.BoolAttribute{
+				Description: "Whether the user administers the organization: every permission, billing included. " +
+					"Changing it needs organization write access. Omit it to leave it as it is.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -169,6 +181,13 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 			fmt.Sprintf("Status: %d, Body: %s", httpResp.StatusCode, string(respBody)),
 		)
 		return
+	}
+
+	if !data.OrganizationAdmin.IsUnknown() && !data.OrganizationAdmin.IsNull() {
+		resp.Diagnostics.Append(r.setOrganizationAdmin(&data)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	// After creating, we need to read the user to get the full details
@@ -289,6 +308,7 @@ func (r *UserResource) readUser(ctx context.Context, data *UserResourceModel) di
 	// Update the model with the response data
 	data.ID = types.StringValue(foundUser.ID)
 	data.Email = types.StringValue(foundUser.Email)
+	data.OrganizationAdmin = types.BoolValue(foundUser.OrganizationAdmin)
 
 	// Handle last_login (can be null)
 	if foundUser.LastLogin != nil {
@@ -371,15 +391,55 @@ func (r *UserResource) readUser(ctx context.Context, data *UserResourceModel) di
 	return nil
 }
 
+// setOrganizationAdmin makes the member an organization administrator, or not.
+func (r *UserResource) setOrganizationAdmin(data *UserResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	body, _ := json.Marshal(map[string]bool{"organization_admin": data.OrganizationAdmin.ValueBool()})
+	url := fmt.Sprintf("https://%s/api/users/%s/users/%s/",
+		r.provider.host,
+		data.OrganizationName.ValueString(),
+		data.Email.ValueString())
+
+	reqHttp, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(string(body)))
+	if err != nil {
+		return append(diags, diag.NewErrorDiagnostic("Error creating request", err.Error()))
+	}
+	reqHttp.Header.Set("Authorization", "Bearer "+r.provider.token)
+	reqHttp.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := r.provider.client.Do(reqHttp)
+	if err != nil {
+		return append(diags, diag.NewErrorDiagnostic("HTTP request failed", err.Error()))
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode < 200 || httpResp.StatusCode > 299 {
+		respBody, _ := io.ReadAll(httpResp.Body)
+		return append(diags, diag.NewErrorDiagnostic(
+			"Setting organization_admin failed",
+			fmt.Sprintf("Status code: %d, Body: %s", httpResp.StatusCode, string(respBody)),
+		))
+	}
+	return nil
+}
+
 func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// For users, we don't support updates through this resource
-	// The email and organization_name are the identifying fields
-	// If they change, Terraform will destroy and recreate the resource
-	var plan UserResourceModel
+	// The email and organization_name are the identifying fields; organization_admin is the
+	// only attribute this resource changes in place.
+	var plan, state UserResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if !plan.OrganizationAdmin.IsUnknown() && !plan.OrganizationAdmin.IsNull() &&
+		!plan.OrganizationAdmin.Equal(state.OrganizationAdmin) {
+		resp.Diagnostics.Append(r.setOrganizationAdmin(&plan)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	// Just read the current state to ensure it's up to date

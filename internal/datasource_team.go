@@ -23,10 +23,11 @@ type TeamDataSource struct {
 }
 
 type TeamDataSourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	OrganizationName types.String `tfsdk:"organization_name"`
-	Name             types.String `tfsdk:"name"`
-	Members          types.List   `tfsdk:"members"`
+	ID                types.String `tfsdk:"id"`
+	OrganizationName  types.String `tfsdk:"organization_name"`
+	Name              types.String `tfsdk:"name"`
+	Members           types.List   `tfsdk:"members"`
+	OrganizationAdmin types.Bool   `tfsdk:"organization_admin"`
 }
 
 func (d *TeamDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -54,6 +55,10 @@ func (d *TeamDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"members": schema.ListAttribute{
 				Description: "List of member email addresses in the team.",
 				ElementType: types.StringType,
+				Computed:    true,
+			},
+			"organization_admin": schema.BoolAttribute{
+				Description: "Whether the team administers the organization.",
 				Computed:    true,
 			},
 		},
@@ -124,6 +129,7 @@ func (d *TeamDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		data.ID = types.StringValue(team.ID)
 		data.Name = types.StringValue(team.Name)
 		data.Members = teamMembersToList(team.Members)
+		data.OrganizationAdmin = types.BoolValue(team.OrganizationAdmin)
 	} else if !data.Name.IsNull() && data.Name.ValueString() != "" {
 		// List and filter by name
 		url := fmt.Sprintf("https://%s/api/organizations/%s/teams/",
@@ -167,6 +173,7 @@ func (d *TeamDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 				data.ID = types.StringValue(team.ID)
 				data.Name = types.StringValue(team.Name)
 				data.Members = teamMembersToList(team.Members)
+				data.OrganizationAdmin = types.BoolValue(team.OrganizationAdmin)
 				found = true
 				break
 			}

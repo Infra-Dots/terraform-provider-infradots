@@ -30,3 +30,4 @@ data "infradots_team_data" "by_id" {
 * `organization_name` - The name of the organization the team belongs to.
 * `name` - The name of the team.
 * `members` - List of member email addresses in the team.
+* `organization_admin` - Whether the team administers the organization.
