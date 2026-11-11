@@ -9,6 +9,13 @@ resource "infradots_user" "example" {
   organization_name = "infradots"
   email             = "jane.doe@example.com"
 }
+
+# An organization administrator
+resource "infradots_user" "owner" {
+  organization_name  = "infradots"
+  email              = "ops-lead@example.com"
+  organization_admin = true
+}
 ```
 
 ## Argument Reference
@@ -17,6 +24,9 @@ The following arguments are supported:
 
 * `organization_name` - (Required) The name of the organization this user belongs to.
 * `email` - (Required) The email address of the user.
+* `organization_admin` - (Optional) Whether the user administers the organization.
+  Administrators hold every permission, billing included. Changing it needs organization write access, and an
+  organization always keeps at least one administrator user or team. Omit it to leave the current value alone.
 
 ## Attributes Reference
 

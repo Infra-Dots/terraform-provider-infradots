@@ -22,6 +22,10 @@ The following arguments are supported:
 * `organization_name` - (Required) The name of the organization this team belongs to.
 * `name` - (Required) The name of the team.
 * `members` - (Optional) A list of member email addresses in the team. If omitted, the team is created with no members.
+* `organization_admin` - (Optional) Whether the team administers the organization; its members and team tokens then
+  hold every permission, billing included. Changing it needs organization write access, and an organization always
+  keeps at least one administrator user or team. Omit it to leave the current value alone. Switching it off also
+  clears the team's organization-level permissions; grant the ones it keeps with `infradots_permission`.
 
 ## Attributes Reference
 

@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -27,26 +28,30 @@ func NewTeamResource() resource.Resource {
 }
 
 type TeamResourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	OrganizationName types.String `tfsdk:"organization_name"`
-	Name             types.String `tfsdk:"name"`
-	Members          types.List   `tfsdk:"members"`
+	ID                types.String `tfsdk:"id"`
+	OrganizationName  types.String `tfsdk:"organization_name"`
+	Name              types.String `tfsdk:"name"`
+	Members           types.List   `tfsdk:"members"`
+	OrganizationAdmin types.Bool   `tfsdk:"organization_admin"`
 }
 
 type TeamAPIResponse struct {
-	ID          string              `json:"id"`
-	Name        string              `json:"name"`
-	Members     []map[string]string `json:"members"`
-	Permissions []interface{}       `json:"permissions"`
+	ID                string              `json:"id"`
+	Name              string              `json:"name"`
+	Members           []map[string]string `json:"members"`
+	Permissions       []interface{}       `json:"permissions"`
+	OrganizationAdmin bool                `json:"organization_admin"`
 }
 
 type TeamCreateRequest struct {
-	Name    string   `json:"name"`
-	Members []string `json:"members,omitempty"`
+	Name              string   `json:"name"`
+	Members           []string `json:"members,omitempty"`
+	OrganizationAdmin bool     `json:"organization_admin,omitempty"`
 }
 
 type TeamUpdateRequest struct {
-	Name string `json:"name,omitempty"`
+	Name              string `json:"name,omitempty"`
+	OrganizationAdmin *bool  `json:"organization_admin,omitempty"`
 }
 
 type TeamResource struct {
@@ -82,6 +87,15 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Optional:    true,
 				Computed:    true,
 			},
+			"organization_admin": schema.BoolAttribute{
+				Description: "Whether the team administers the organization: its members hold every permission, " +
+					"billing included. Changing it needs organization write access. Omit it to leave it as it is.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 	}
 }
@@ -116,7 +130,8 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	createReq := TeamCreateRequest{
-		Name: data.Name.ValueString(),
+		Name:              data.Name.ValueString(),
+		OrganizationAdmin: data.OrganizationAdmin.ValueBool(),
 	}
 
 	if !data.Members.IsNull() && !data.Members.IsUnknown() {
@@ -178,6 +193,7 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	data.ID = types.StringValue(team.ID)
 	data.Name = types.StringValue(team.Name)
 	data.Members = teamMembersToList(team.Members)
+	data.OrganizationAdmin = types.BoolValue(team.OrganizationAdmin)
 
 	diags = resp.State.Set(ctx, &data)
 	tflog.Info(ctx, "Team Resource Created", map[string]any{"success": true})
@@ -237,6 +253,7 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	data.ID = types.StringValue(team.ID)
 	data.Name = types.StringValue(team.Name)
 	data.Members = teamMembersToList(team.Members)
+	data.OrganizationAdmin = types.BoolValue(team.OrganizationAdmin)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -257,10 +274,18 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	// Update team name if changed
-	if !plan.Name.Equal(state.Name) {
-		updateReq := TeamUpdateRequest{
-			Name: plan.Name.ValueString(),
+	// Update team name and administrator flag if changed. Only what changed is sent: an
+	// unchanged organization_admin would need organization write access for a plain rename.
+	adminChanged := !plan.OrganizationAdmin.IsUnknown() && !plan.OrganizationAdmin.IsNull() &&
+		!plan.OrganizationAdmin.Equal(state.OrganizationAdmin)
+	if !plan.Name.Equal(state.Name) || adminChanged {
+		updateReq := TeamUpdateRequest{}
+		if !plan.Name.Equal(state.Name) {
+			updateReq.Name = plan.Name.ValueString()
+		}
+		if adminChanged {
+			admin := plan.OrganizationAdmin.ValueBool()
+			updateReq.OrganizationAdmin = &admin
 		}
 
 		reqBody, err := json.Marshal(updateReq)
@@ -391,6 +416,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	plan.ID = types.StringValue(team.ID)
 	plan.Name = types.StringValue(team.Name)
 	plan.Members = teamMembersToList(team.Members)
+	plan.OrganizationAdmin = types.BoolValue(team.OrganizationAdmin)
 
 	diags = resp.State.Set(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -514,6 +540,7 @@ func (r *TeamResource) ImportState(ctx context.Context, req resource.ImportState
 	data.OrganizationName = types.StringValue(organizationName)
 	data.Name = types.StringValue(found.Name)
 	data.Members = teamMembersToList(found.Members)
+	data.OrganizationAdmin = types.BoolValue(found.OrganizationAdmin)
 
 	diags := resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)

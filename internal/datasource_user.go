@@ -23,16 +23,18 @@ type UserDataSource struct {
 }
 
 type UserDataSourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	OrganizationName types.String `tfsdk:"organization_name"`
-	Email            types.String `tfsdk:"email"`
-	Name             types.String `tfsdk:"name"`
+	ID                types.String `tfsdk:"id"`
+	OrganizationName  types.String `tfsdk:"organization_name"`
+	Email             types.String `tfsdk:"email"`
+	Name              types.String `tfsdk:"name"`
+	OrganizationAdmin types.Bool   `tfsdk:"organization_admin"`
 }
 
 type UserListAPIResponse struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Email             string `json:"email"`
+	OrganizationAdmin bool   `json:"organization_admin"`
 }
 
 func (d *UserDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -57,6 +59,10 @@ func (d *UserDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			},
 			"name": schema.StringAttribute{
 				Description: "The name of the user.",
+				Computed:    true,
+			},
+			"organization_admin": schema.BoolAttribute{
+				Description: "Whether the user administers the organization.",
 				Computed:    true,
 			},
 		},
@@ -132,6 +138,7 @@ func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 			data.ID = types.StringValue(u.ID)
 			data.Email = types.StringValue(u.Email)
 			data.Name = types.StringValue(u.Name)
+			data.OrganizationAdmin = types.BoolValue(u.OrganizationAdmin)
 			found = true
 			break
 		}
