@@ -963,3 +963,68 @@ func TestWorkspaceResource_TargetedApply_ReadMapping(t *testing.T) {
 		assert.False(t, data.TargetedApply.IsNull())
 	}
 }
+
+func TestWorkspaceResource_CheckovMode(t *testing.T) {
+	ctx := context.Background()
+	body := `{"id": "id-1", "name": "test-workspace", "source": "https://github.com/test/repo",
+		"branch": "main", "terraform_version": "1.5.0", "folder": "/", "execution_mode": "Remote",
+		"agents_enabled": true, "tags": {}, "checkov_mode": "advisory"}`
+
+	// Create sends the mode and maps it back.
+	capt := &capturingRoundTripper{status: http.StatusCreated, respBody: body}
+	r, schemaResp := targetedApplyResource(capt)
+	plan := targetedApplyModel(false)
+	plan.CheckovMode = types.StringValue("advisory")
+	createReq := resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema}}
+	require.Empty(t, createReq.Plan.Set(ctx, &plan))
+	createResp := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Create(ctx, createReq, &createResp)
+	require.False(t, createResp.Diagnostics.HasError())
+	var sentCreate WorkspaceCreateRequest
+	require.NoError(t, json.Unmarshal([]byte(capt.lastBody), &sentCreate))
+	require.NotNil(t, sentCreate.CheckovMode)
+	assert.Equal(t, "advisory", *sentCreate.CheckovMode)
+	var created WorkspaceResourceModel
+	require.Empty(t, createResp.State.Get(ctx, &created))
+	assert.Equal(t, "advisory", created.CheckovMode.ValueString())
+
+	// Update sends it only when changed.
+	for _, tc := range []struct {
+		before, after types.String
+		wantSent      bool
+	}{
+		{types.StringNull(), types.StringValue("advisory"), true},
+		{types.StringValue("advisory"), types.StringValue("blocking"), true},
+		{types.StringValue("advisory"), types.StringValue("advisory"), false},
+	} {
+		capt := &capturingRoundTripper{status: http.StatusOK, respBody: body}
+		r, schemaResp := targetedApplyResource(capt)
+		state, plan := targetedApplyModel(false), targetedApplyModel(false)
+		state.CheckovMode, plan.CheckovMode = tc.before, tc.after
+		req := resource.UpdateRequest{
+			State: tfsdk.State{Schema: schemaResp.Schema},
+			Plan:  tfsdk.Plan{Schema: schemaResp.Schema},
+		}
+		require.Empty(t, req.State.Set(ctx, &state))
+		require.Empty(t, req.Plan.Set(ctx, &plan))
+		resp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		r.Update(ctx, req, &resp)
+		require.False(t, resp.Diagnostics.HasError())
+		var sent WorkspaceUpdateRequest
+		require.NoError(t, json.Unmarshal([]byte(capt.lastBody), &sent))
+		if tc.wantSent {
+			require.NotNil(t, sent.CheckovMode)
+			assert.Equal(t, tc.after.ValueString(), *sent.CheckovMode)
+		} else {
+			assert.Nil(t, sent.CheckovMode)
+		}
+	}
+
+	// Read: null from the API (inherit) stays null.
+	var data WorkspaceResourceModel
+	mapWorkspaceResponseToModel(ctx, &data, WorkspaceAPIResponse{})
+	assert.True(t, data.CheckovMode.IsNull())
+	mode := "blocking"
+	mapWorkspaceResponseToModel(ctx, &data, WorkspaceAPIResponse{CheckovMode: &mode})
+	assert.Equal(t, "blocking", data.CheckovMode.ValueString())
+}

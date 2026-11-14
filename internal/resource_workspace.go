@@ -58,6 +58,7 @@ type WorkspaceResourceModel struct {
 	AutoImplementChanges  types.Bool   `tfsdk:"auto_implement_changes"`
 	ValidateMode          types.String `tfsdk:"validate_mode"`
 	TflintMode            types.String `tfsdk:"tflint_mode"`
+	CheckovMode           types.String `tfsdk:"checkov_mode"`
 	TflintPlugins         types.List   `tfsdk:"tflint_plugins"`
 	SshId                 types.String `tfsdk:"ssh_id"`
 	ModuleSshKey          types.String `tfsdk:"module_ssh_key"`
@@ -113,6 +114,7 @@ type WorkspaceAPIResponse struct {
 	AutoImplementChanges  *bool            `json:"auto_implement_changes"`
 	ValidateMode          *string          `json:"validate_mode"`
 	TflintMode            *string          `json:"tflint_mode"`
+	CheckovMode           *string          `json:"checkov_mode"`
 	TflintPlugins         []string         `json:"tflint_plugins"`
 	SshId                 string           `json:"ssh_id"`
 	ModuleSshKey          string           `json:"module_ssh_key"`
@@ -143,6 +145,7 @@ type WorkspaceCreateRequest struct {
 	AutoImplementChanges  *bool            `json:"auto_implement_changes,omitempty"`
 	ValidateMode          *string          `json:"validate_mode,omitempty"`
 	TflintMode            *string          `json:"tflint_mode,omitempty"`
+	CheckovMode           *string          `json:"checkov_mode,omitempty"`
 	TflintPlugins         []string         `json:"tflint_plugins,omitempty"`
 	SshId                 string           `json:"ssh_id,omitempty"`
 	ModuleSshKey          string           `json:"module_ssh_key,omitempty"`
@@ -184,6 +187,7 @@ type WorkspaceUpdateRequest struct {
 	AutoImplementChanges  *bool             `json:"auto_implement_changes,omitempty"`
 	ValidateMode          *string           `json:"validate_mode,omitempty"`
 	TflintMode            *string           `json:"tflint_mode,omitempty"`
+	CheckovMode           *string           `json:"checkov_mode,omitempty"`
 	TflintPlugins         []string          `json:"tflint_plugins,omitempty"`
 	SshId                 string            `json:"ssh_id,omitempty"`
 	ModuleSshKey          string            `json:"module_ssh_key,omitempty"`
@@ -387,6 +391,10 @@ func (r *WorkspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "Pre-plan tflint hook mode: off, advisory or blocking. If null, inherits from the organization.",
 				Optional:    true,
 			},
+			"checkov_mode": schema.StringAttribute{
+				Description: "Pre-plan checkov hook mode: off, advisory or blocking. Tune rules with a .checkov.yaml in the repository. If null, inherits from the organization.",
+				Optional:    true,
+			},
 			"tflint_plugins": schema.ListAttribute{
 				Description: "tflint ruleset plugins to enable (e.g. [\"aws\"]). If null, inherits from the organization.",
 				ElementType: types.StringType,
@@ -557,6 +565,11 @@ func mapWorkspaceResponseToModel(ctx context.Context, data *WorkspaceResourceMod
 	} else {
 		data.TflintMode = types.StringNull()
 	}
+	if workspace.CheckovMode != nil {
+		data.CheckovMode = types.StringValue(*workspace.CheckovMode)
+	} else {
+		data.CheckovMode = types.StringNull()
+	}
 	if workspace.TflintPlugins != nil {
 		pluginVals := make([]attr.Value, 0, len(workspace.TflintPlugins))
 		for _, p := range workspace.TflintPlugins {
@@ -652,6 +665,10 @@ func (r *WorkspaceResource) Create(ctx context.Context, req resource.CreateReque
 	if !data.TflintMode.IsNull() {
 		v := data.TflintMode.ValueString()
 		createReq.TflintMode = &v
+	}
+	if !data.CheckovMode.IsNull() {
+		v := data.CheckovMode.ValueString()
+		createReq.CheckovMode = &v
 	}
 	if !data.TflintPlugins.IsNull() && !data.TflintPlugins.IsUnknown() {
 		var plugins []string
@@ -918,6 +935,10 @@ func (r *WorkspaceResource) Update(ctx context.Context, req resource.UpdateReque
 	if !plan.TflintMode.Equal(state.TflintMode) && !plan.TflintMode.IsNull() {
 		v := plan.TflintMode.ValueString()
 		updateReq.TflintMode = &v
+	}
+	if !plan.CheckovMode.Equal(state.CheckovMode) && !plan.CheckovMode.IsNull() {
+		v := plan.CheckovMode.ValueString()
+		updateReq.CheckovMode = &v
 	}
 	if !plan.TflintPlugins.Equal(state.TflintPlugins) && !plan.TflintPlugins.IsNull() && !plan.TflintPlugins.IsUnknown() {
 		var plugins []string
