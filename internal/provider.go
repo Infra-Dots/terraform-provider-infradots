@@ -119,6 +119,7 @@ func (p *InfradotsProvider) Resources(_ context.Context) []func() resource.Resou
 		NewSshKeyResource,
 		NewWorkspaceScheduleResource,
 		NewAgentSkillResource,
+		NewPolicyResource,
 	}
 }
 
