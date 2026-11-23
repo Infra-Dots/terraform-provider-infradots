@@ -357,7 +357,7 @@ func (m *PolicyResourceModel) apply(p PolicyAPIResponse) error {
 		switch value := c["value"].(type) {
 		case nil:
 		case []any:
-			m.Values = stringList(value)
+			m.Values = jsonStringList(value)
 		default:
 			dynamic, err := jsonToDynamic(value)
 			if err != nil {
@@ -367,7 +367,7 @@ func (m *PolicyResourceModel) apply(p PolicyAPIResponse) error {
 		}
 	case "require_tags":
 		tags, _ := c["tags"].([]any)
-		m.RequiredTags = stringList(tags)
+		m.RequiredTags = jsonStringList(tags)
 	case "no_open_ingress":
 		ports, _ := c["ports"].([]any)
 		elements := make([]attr.Value, 0, len(ports))
@@ -383,7 +383,7 @@ func (m *PolicyResourceModel) apply(p PolicyAPIResponse) error {
 	return nil
 }
 
-func stringList(values []any) types.List {
+func jsonStringList(values []any) types.List {
 	elements := make([]attr.Value, 0, len(values))
 	for _, value := range values {
 		elements = append(elements, types.StringValue(fmt.Sprint(value)))

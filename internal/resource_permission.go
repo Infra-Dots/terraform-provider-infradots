@@ -87,7 +87,7 @@ func (r *PermissionResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Optional:    true,
 			},
 			"permission": schema.StringAttribute{
-				Description: "The permission codename (e.g., read_workspaces, write_workspaces, read_organizations, write_organizations, read_teams, write_teams).",
+				Description: "The permission codename (e.g., read_workspaces, write_workspaces, read_organizations, write_organizations, read_teams, write_teams, write_agents).",
 				Required:    true,
 			},
 			"workspace_name": schema.StringAttribute{

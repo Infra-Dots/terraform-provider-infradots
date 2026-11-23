@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -34,11 +36,16 @@ type AgentSkillResourceModel struct {
 	Name             types.String `tfsdk:"name"`
 	DisplayName      types.String `tfsdk:"display_name"`
 	Description      types.String `tfsdk:"description"`
+	Instructions     types.String `tfsdk:"instructions"`
+	Agents           types.List   `tfsdk:"agents"`
+	ResourceTypes    types.List   `tfsdk:"resource_types"`
+	IacTypes         types.List   `tfsdk:"iac_types"`
 	Enabled          types.Bool   `tfsdk:"enabled"`
 	Config           types.String `tfsdk:"config"`
 	SourceRepo       types.String `tfsdk:"source_repo"`
 	SourcePath       types.String `tfsdk:"source_path"`
 	SourceRef        types.String `tfsdk:"source_ref"`
+	SourceCommit     types.String `tfsdk:"source_commit"`
 	IsGithubSourced  types.Bool   `tfsdk:"is_github_sourced"`
 	CreatedAt        types.String `tfsdk:"created_at"`
 }
@@ -50,34 +57,35 @@ type AgentSkillAPIResponse struct {
 	Name            string          `json:"name"`
 	DisplayName     string          `json:"display_name"`
 	Description     string          `json:"description"`
+	Instructions    string          `json:"instructions"`
+	Agents          []string        `json:"agents"`
+	ResourceTypes   []string        `json:"resource_types"`
+	IacTypes        []string        `json:"iac_types"`
 	Enabled         bool            `json:"enabled"`
 	Config          json.RawMessage `json:"config"`
 	SourceRepo      string          `json:"source_repo"`
 	SourcePath      string          `json:"source_path"`
 	SourceRef       string          `json:"source_ref"`
+	SourceCommit    string          `json:"source_commit"`
 	IsGithubSourced bool            `json:"is_github_sourced"`
 	CreatedAt       time.Time       `json:"created_at"`
 }
 
-type AgentSkillCreateRequest struct {
-	Name        string          `json:"name"`
-	DisplayName string          `json:"display_name"`
-	Description string          `json:"description,omitempty"`
-	Enabled     bool            `json:"enabled"`
-	Config      json.RawMessage `json:"config,omitempty"`
-	SourceRepo  string          `json:"source_repo,omitempty"`
-	SourcePath  string          `json:"source_path,omitempty"`
-	SourceRef   string          `json:"source_ref,omitempty"`
-}
-
-type AgentSkillUpdateRequest struct {
-	DisplayName string          `json:"display_name,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Enabled     *bool           `json:"enabled,omitempty"`
-	Config      json.RawMessage `json:"config,omitempty"`
-	SourceRepo  string          `json:"source_repo,omitempty"`
-	SourcePath  string          `json:"source_path,omitempty"`
-	SourceRef   string          `json:"source_ref,omitempty"`
+// AgentSkillRequest creates or updates a skill. Instructions and the source fields are always sent: the API
+// refuses a skill with both, so switching from one to the other has to clear the old.
+type AgentSkillRequest struct {
+	Name          string          `json:"name"`
+	DisplayName   string          `json:"display_name"`
+	Description   string          `json:"description"`
+	Instructions  string          `json:"instructions"`
+	Agents        []string        `json:"agents"`
+	ResourceTypes []string        `json:"resource_types"`
+	IacTypes      []string        `json:"iac_types"`
+	Enabled       bool            `json:"enabled"`
+	Config        json.RawMessage `json:"config,omitempty"`
+	SourceRepo    string          `json:"source_repo"`
+	SourcePath    string          `json:"source_path"`
+	SourceRef     string          `json:"source_ref"`
 }
 
 // ── Resource struct ──────────────────────────────────────────────────────────
@@ -92,7 +100,10 @@ func (r *AgentSkillResource) Metadata(_ context.Context, _ resource.MetadataRequ
 
 func (r *AgentSkillResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "An AI agent skill scoped to an organization in InfraDots.",
+		MarkdownDescription: "An organization's agent skill: inline `instructions`, or a skill directory in git " +
+			"(`source_repo` + `source_path`). A `name` a platform skill has replaces that skill for the organization; " +
+			"`enabled = false` with no content turns it off. Agents see `description` in their skill index and load the " +
+			"instructions only when the skill fits the run. Needs the `write_agents` permission.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The skill UUID.",
@@ -109,7 +120,7 @@ func (r *AgentSkillResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "Slug identifier used in code (e.g. 'review', 'bootstrap'). Unique per organization.",
+				Description: "Skill name agents load it by: lowercase letters, digits and single hyphens. Unique per organization; a platform skill's name replaces it.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -120,7 +131,30 @@ func (r *AgentSkillResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Required:    true,
 			},
 			"description": schema.StringAttribute{
-				Description: "Optional description of what the skill does.",
+				Description: "One line (at most 128 characters) agents read to decide when to load the skill. A git skill without one uses SKILL.md's.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"instructions": schema.StringAttribute{
+				Description: "The skill's instructions (Markdown) for an inline skill, e.g. file(\"SKILL.md\") without its frontmatter.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"agents": schema.ListAttribute{
+				Description: "Only these agents list the skill: review, implement, remediate. Empty: all.",
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+			},
+			"resource_types": schema.ListAttribute{
+				Description: "Only runs touching these resource types list the skill; patterns such as aws_iam_*. Empty: every run.",
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+			},
+			"iac_types": schema.ListAttribute{
+				Description: "Only TF, OT and/or TG workspaces. Empty: all.",
+				ElementType: types.StringType,
 				Optional:    true,
 				Computed:    true,
 			},
@@ -136,18 +170,22 @@ func (r *AgentSkillResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Computed:    true,
 			},
 			"source_repo": schema.StringAttribute{
-				Description: "GitHub repository URL for user-defined skills.",
+				Description: "https:// repository holding the skill directory (a git skill). The organization's VCS token is sent only to its own host.",
 				Optional:    true,
 				Computed:    true,
 			},
 			"source_path": schema.StringAttribute{
-				Description: "Path to the skill entrypoint within the repository.",
+				Description: "The skill directory in source_repo, holding SKILL.md; its name must equal `name`.",
 				Optional:    true,
 				Computed:    true,
 			},
 			"source_ref": schema.StringAttribute{
-				Description: "Branch, tag, or commit SHA to use from the repository.",
+				Description: "Branch, tag or commit of source_repo. Saving pins the commit it points to (source_commit).",
 				Optional:    true,
+				Computed:    true,
+			},
+			"source_commit": schema.StringAttribute{
+				Description: "The commit source_ref pointed to when the skill was saved and screened: what runs load.",
 				Computed:    true,
 			},
 			"is_github_sourced": schema.BoolAttribute{
@@ -178,10 +216,15 @@ func agentSkillAPIToModel(data *AgentSkillResourceModel, skill AgentSkillAPIResp
 	data.Name = types.StringValue(skill.Name)
 	data.DisplayName = types.StringValue(skill.DisplayName)
 	data.Description = types.StringValue(skill.Description)
+	data.Instructions = types.StringValue(skill.Instructions)
+	data.Agents = stringList(skill.Agents)
+	data.ResourceTypes = stringList(skill.ResourceTypes)
+	data.IacTypes = stringList(skill.IacTypes)
 	data.Enabled = types.BoolValue(skill.Enabled)
 	data.SourceRepo = types.StringValue(skill.SourceRepo)
 	data.SourcePath = types.StringValue(skill.SourcePath)
 	data.SourceRef = types.StringValue(skill.SourceRef)
+	data.SourceCommit = types.StringValue(skill.SourceCommit)
 	data.IsGithubSourced = types.BoolValue(skill.IsGithubSourced)
 	data.CreatedAt = types.StringValue(skill.CreatedAt.Format(time.RFC3339))
 
@@ -198,6 +241,54 @@ func (r *AgentSkillResource) skillURL(orgName, id string) string {
 		return fmt.Sprintf("https://%s/api/agents/%s/skills/", r.provider.host, orgName)
 	}
 	return fmt.Sprintf("https://%s/api/agents/%s/skills/%s/", r.provider.host, orgName, id)
+}
+
+func stringList(values []string) types.List {
+	elements := make([]attr.Value, len(values))
+	for i, v := range values {
+		elements[i] = types.StringValue(v)
+	}
+	return types.ListValueMust(types.StringType, elements)
+}
+
+// listStrings is a planned list as the API takes it: never null, and empty while unknown.
+func listStrings(ctx context.Context, value types.List) ([]string, diag.Diagnostics) {
+	out := []string{}
+	if value.IsNull() || value.IsUnknown() {
+		return out, nil
+	}
+	diags := value.ElementsAs(ctx, &out, false)
+	return out, diags
+}
+
+// agentSkillRequest is the plan as the API takes it.
+func agentSkillRequest(ctx context.Context, data AgentSkillResourceModel) (AgentSkillRequest, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	configRaw, err := configToRawMessage(data.Config.ValueString())
+	if err != nil {
+		diags.AddError("Invalid config JSON", err.Error())
+		return AgentSkillRequest{}, diags
+	}
+	body := AgentSkillRequest{
+		Name:         data.Name.ValueString(),
+		DisplayName:  data.DisplayName.ValueString(),
+		Description:  data.Description.ValueString(),
+		Instructions: data.Instructions.ValueString(),
+		Enabled:      data.Enabled.ValueBool(),
+		Config:       configRaw,
+		SourceRepo:   data.SourceRepo.ValueString(),
+		SourcePath:   data.SourcePath.ValueString(),
+		SourceRef:    data.SourceRef.ValueString(),
+	}
+	for _, field := range []struct {
+		value types.List
+		out   *[]string
+	}{{data.Agents, &body.Agents}, {data.ResourceTypes, &body.ResourceTypes}, {data.IacTypes, &body.IacTypes}} {
+		values, d := listStrings(ctx, field.value)
+		diags.Append(d...)
+		*field.out = values
+	}
+	return body, diags
 }
 
 func configToRawMessage(configStr string) (json.RawMessage, error) {
@@ -220,21 +311,10 @@ func (r *AgentSkillResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	configRaw, err := configToRawMessage(data.Config.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid config JSON", err.Error())
+	body, diags := agentSkillRequest(ctx, data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
-	}
-
-	body := AgentSkillCreateRequest{
-		Name:        data.Name.ValueString(),
-		DisplayName: data.DisplayName.ValueString(),
-		Description: data.Description.ValueString(),
-		Enabled:     data.Enabled.ValueBool(),
-		Config:      configRaw,
-		SourceRepo:  data.SourceRepo.ValueString(),
-		SourcePath:  data.SourcePath.ValueString(),
-		SourceRef:   data.SourceRef.ValueString(),
 	}
 
 	reqBody, err := json.Marshal(body)
@@ -343,21 +423,10 @@ func (r *AgentSkillResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	data.ID = state.ID
 
-	configRaw, err := configToRawMessage(data.Config.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid config JSON", err.Error())
+	body, diags := agentSkillRequest(ctx, data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
-	}
-
-	enabled := data.Enabled.ValueBool()
-	body := AgentSkillUpdateRequest{
-		DisplayName: data.DisplayName.ValueString(),
-		Description: data.Description.ValueString(),
-		Enabled:     &enabled,
-		Config:      configRaw,
-		SourceRepo:  data.SourceRepo.ValueString(),
-		SourcePath:  data.SourcePath.ValueString(),
-		SourceRef:   data.SourceRef.ValueString(),
 	}
 
 	reqBody, err := json.Marshal(body)
