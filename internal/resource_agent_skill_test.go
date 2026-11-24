@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -186,6 +187,7 @@ func TestAgentSkillResource_Create(t *testing.T) {
 	ctx := context.Background()
 
 	var plan AgentSkillResourceModel
+	plan.Agents, plan.ResourceTypes, plan.IacTypes = nullStrings(), nullStrings(), nullStrings()
 	plan.OrganizationName = types.StringValue("test-org")
 	plan.Name = types.StringValue("review")
 	plan.DisplayName = types.StringValue("Code Review")
@@ -219,6 +221,7 @@ func TestAgentSkillResource_Create(t *testing.T) {
 	require.False(t, response.Diagnostics.HasError())
 
 	var state AgentSkillResourceModel
+	state.Agents, state.ResourceTypes, state.IacTypes = nullStrings(), nullStrings(), nullStrings()
 	diags = response.State.Get(ctx, &state)
 	require.Empty(t, diags)
 
@@ -236,6 +239,7 @@ func TestAgentSkillResource_Read(t *testing.T) {
 	ctx := context.Background()
 
 	var state AgentSkillResourceModel
+	state.Agents, state.ResourceTypes, state.IacTypes = nullStrings(), nullStrings(), nullStrings()
 	state.ID = types.StringValue("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 	state.OrganizationName = types.StringValue("test-org")
 	state.Name = types.StringValue("review")
@@ -287,6 +291,7 @@ func TestAgentSkillResource_Update(t *testing.T) {
 	ctx := context.Background()
 
 	var state AgentSkillResourceModel
+	state.Agents, state.ResourceTypes, state.IacTypes = nullStrings(), nullStrings(), nullStrings()
 	state.ID = types.StringValue("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 	state.OrganizationName = types.StringValue("test-org")
 	state.Name = types.StringValue("review")
@@ -301,6 +306,7 @@ func TestAgentSkillResource_Update(t *testing.T) {
 	state.CreatedAt = types.StringValue("2025-07-07T12:00:00Z")
 
 	var plan AgentSkillResourceModel
+	plan.Agents, plan.ResourceTypes, plan.IacTypes = nullStrings(), nullStrings(), nullStrings()
 	plan.OrganizationName = types.StringValue("test-org")
 	plan.Name = types.StringValue("review")
 	plan.DisplayName = types.StringValue("Updated Code Review")
@@ -355,6 +361,7 @@ func TestAgentSkillResource_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	var state AgentSkillResourceModel
+	state.Agents, state.ResourceTypes, state.IacTypes = nullStrings(), nullStrings(), nullStrings()
 	state.ID = types.StringValue("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 	state.OrganizationName = types.StringValue("test-org")
 	state.Name = types.StringValue("review")
@@ -410,6 +417,7 @@ func TestAgentSkillResource_ImportState(t *testing.T) {
 	require.False(t, response.Diagnostics.HasError())
 
 	var state AgentSkillResourceModel
+	state.Agents, state.ResourceTypes, state.IacTypes = nullStrings(), nullStrings(), nullStrings()
 	diags := response.State.Get(ctx, &state)
 	require.Empty(t, diags)
 
@@ -461,4 +469,63 @@ func TestAgentSkillResource_ImportState_NotFound(t *testing.T) {
 
 	require.True(t, response.Diagnostics.HasError())
 	assert.Contains(t, response.Diagnostics.Errors()[0].Summary(), "Skill not found")
+}
+
+func nullStrings() types.List { return types.ListNull(types.StringType) }
+
+// skillCaptureRoundTripper records the request body and answers with a git skill, pinned.
+type skillCaptureRoundTripper struct{ body string }
+
+func (c *skillCaptureRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	raw, _ := io.ReadAll(req.Body)
+	c.body = string(raw)
+	resp := &http.Response{Header: make(http.Header), Request: req, StatusCode: http.StatusCreated}
+	resp.Body = io.NopCloser(strings.NewReader(`{"id": "s1", "name": "iac-security-review", "display_name": "IaC security",
+		"description": "Security review of IaC changes.", "instructions": "", "agents": ["review"],
+		"resource_types": ["aws_iam_*"], "iac_types": [], "enabled": true, "source_repo": "https://github.com/a/iac-ai",
+		"source_path": "skills/iac-security-review", "source_ref": "main", "source_commit": "0123456789abcdef",
+		"created_at": "2026-11-14T12:00:00Z"}`))
+	return resp, nil
+}
+
+func TestAgentSkillResource_CreateSendsEveryFieldAndKeepsThePinnedCommit(t *testing.T) {
+	capture := &skillCaptureRoundTripper{}
+	r := &AgentSkillResource{provider: &InfradotsProvider{host: "api.infradots.com", token: "t", client: &http.Client{Transport: capture}}}
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	var plan AgentSkillResourceModel
+	plan.OrganizationName = types.StringValue("test-org")
+	plan.Name = types.StringValue("iac-security-review")
+	plan.DisplayName = types.StringValue("IaC security")
+	plan.Description = types.StringUnknown()
+	plan.Instructions = types.StringUnknown()
+	plan.Agents = types.ListValueMust(types.StringType, []attr.Value{types.StringValue("review")})
+	plan.ResourceTypes, plan.IacTypes = types.ListUnknown(types.StringType), nullStrings()
+	plan.Enabled = types.BoolValue(true)
+	plan.Config = types.StringValue("")
+	plan.SourceRepo = types.StringValue("https://github.com/a/iac-ai")
+	plan.SourcePath = types.StringValue("skills/iac-security-review")
+	plan.SourceRef = types.StringValue("main")
+
+	request := resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema}}
+	require.Empty(t, request.Plan.Set(ctx, &plan))
+	response := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Create(ctx, request, &response)
+	require.False(t, response.Diagnostics.HasError(), response.Diagnostics)
+
+	// The API refuses a skill with both sources and a null list, so both go out explicitly empty.
+	assert.Contains(t, capture.body, `"instructions":""`)
+	assert.Contains(t, capture.body, `"agents":["review"]`)
+	assert.Contains(t, capture.body, `"resource_types":[]`)
+	assert.Contains(t, capture.body, `"iac_types":[]`)
+
+	var state AgentSkillResourceModel
+	require.Empty(t, response.State.Get(ctx, &state))
+	assert.Equal(t, "0123456789abcdef", state.SourceCommit.ValueString())
+	assert.Equal(t, "Security review of IaC changes.", state.Description.ValueString())
+	var types_ []string
+	require.Empty(t, state.ResourceTypes.ElementsAs(ctx, &types_, false))
+	assert.Equal(t, []string{"aws_iam_*"}, types_)
 }

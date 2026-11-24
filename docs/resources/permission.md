@@ -24,7 +24,7 @@ resource "infradots_permission" "user_write_workspace" {
 The following arguments are supported:
 
 * `organization_name` - (Required) The name of the organization.
-* `permission` - (Required) The permission codename (e.g., `read_workspaces`, `write_workspaces`, `read_organizations`, `write_organizations`, `read_teams`, `write_teams`).
+* `permission` - (Required) The permission codename (e.g., `read_workspaces`, `write_workspaces`, `read_organizations`, `write_organizations`, `read_teams`, `write_teams`, `write_agents` — changing the organization's agent skills, plugins and guidance).
 * `team_id` - (Optional) The ID of the team to assign the permission to. Mutually exclusive with `user_email`.
 * `user_email` - (Optional) The email of the user to assign the permission to. Mutually exclusive with `team_id`.
 * `workspace_name` - (Optional) The name of the workspace to scope this permission to. If not set, the permission is organization-level.
